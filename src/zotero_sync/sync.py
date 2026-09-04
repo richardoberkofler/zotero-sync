@@ -39,7 +39,9 @@ def _collection_maps() -> tuple[dict[str, str], dict[str, str | None]]:
     return names, parents
 
 
-def build_papers(config: Config, db_copy_path) -> tuple[list[Paper], dict[str, dict]]:
+def build_papers(
+    config: Config, db_copy_path, counts: SyncCounts | None = None
+) -> tuple[list[Paper], dict[str, dict]]:
     collection_key = None
     if config.collection:
         collection_key = local_api.find_collection_key(config.collection)
@@ -63,6 +65,11 @@ def build_papers(config: Config, db_copy_path) -> tuple[list[Paper], dict[str, d
         data = item["data"]
         citekey = citekey_map.get(item_id)
         if not citekey:
+            if counts is not None:
+                title = data.get("title") or "(untitled)"
+                counts.errors.append(
+                    f"{title}: skipped — no Better BibTeX citekey found for this item"
+                )
             continue
 
         authors = [_creator_name(c) for c in data.get("creators", [])]
@@ -134,7 +141,7 @@ def run(config: Config) -> SyncCounts:
     db_copy = annotations.copy_database(source_db)
 
     try:
-        papers, collection_info = build_papers(config, db_copy)
+        papers, collection_info = build_papers(config, db_copy, counts)
         attach_annotations(papers, db_copy)
     finally:
         db_copy.unlink(missing_ok=True)
