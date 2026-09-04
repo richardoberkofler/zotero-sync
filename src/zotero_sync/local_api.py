@@ -7,6 +7,9 @@ import urllib.request
 
 from zotero_sync.errors import PreconditionError
 
+# Zotero's local HTTP API always addresses the local user's library as
+# user id 0, regardless of the actual zotero.org account id — there is no
+# "current user" endpoint to discover a real id from.
 BASE_URL = "http://127.0.0.1:23119/api/users/0"
 PAGE_SIZE = 100
 NON_PAPER_ITEM_TYPES = {"attachment", "note", "annotation"}

@@ -21,6 +21,8 @@ BBT_LIBRARY_ID = 1
 
 
 def _creator_name(creator: dict) -> str:
+    # Zotero represents creators two ways: a single "name" field for
+    # organizations/institutions, or split firstName/lastName for people.
     if "name" in creator:
         return creator["name"]
     return " ".join(part for part in (creator.get("firstName"), creator.get("lastName")) if part)

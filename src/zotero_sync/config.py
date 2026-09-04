@@ -113,5 +113,8 @@ def apply_overrides(
         config.collection = collection
     if include_auto_tags is not None:
         config.include_auto_tags = include_auto_tags
+    # Unlike the other flags, dry_run has no config-file counterpart to fall
+    # back to, so it's always taken from the CLI (argparse defaults it to
+    # False rather than None) instead of being guarded by an is-None check.
     config.dry_run = dry_run
     return config

@@ -78,6 +78,9 @@ def item_ids_by_key(db_copy_path: Path, keys: list[str]) -> dict[str, int]:
     internal numeric itemID used by zotero.sqlite's own tables."""
     conn = sqlite3.connect(f"file:{db_copy_path}?mode=ro", uri=True)
     try:
+        # `key` is only unique within a single library, not across the whole
+        # database — this assumes the default single-library setup (mirrors
+        # sync.py's BBT_LIBRARY_ID assumption) and doesn't scope by libraryID.
         placeholders = ",".join("?" * len(keys))
         rows = conn.execute(
             f"SELECT key, itemID FROM items WHERE key IN ({placeholders})", keys
