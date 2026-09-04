@@ -17,7 +17,8 @@ _ANNOTATIONS_RE = re.compile(
 
 
 def _yaml_scalar(value: str) -> str:
-    escaped = value.replace('"', '\\"')
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    escaped = escaped.replace("\r\n", "\\n").replace("\n", "\\n").replace("\r", "\\n")
     return f'"{escaped}"'
 
 
