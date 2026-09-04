@@ -30,7 +30,7 @@ def build_parser() -> argparse.ArgumentParser:
         dest="include_auto_tags",
         action="store_true",
         default=None,
-        help="Include Zotero's automatically-derived tags in keyword index notes.",
+        help="Include Zotero's automatically-derived tags on paper notes.",
     )
     parser.add_argument(
         "--dry-run",
