@@ -142,6 +142,12 @@ def run(config: Config) -> SyncCounts:
     fields = config.frontmatter_fields
     seen_citekeys: set[str] = set()
     seen_collections: set[str] = set()
+    # Citekeys that failed to sync this run (OSError or case-insensitive
+    # collision) but are still present in the Zotero library — must be kept
+    # out of the retire pass below, or a transient failure would wrongly
+    # trash the paper's pre-existing note even though it's still in the
+    # library.
+    failed_citekeys: set[str] = set()
     # Paper notes live in a flat Papers/ folder keyed by citekey (filenames.py
     # sanitize()); on case-insensitive filesystems (Windows, default macOS),
     # two distinct citekeys differing only by case collide onto one file and
@@ -155,12 +161,14 @@ def run(config: Config) -> SyncCounts:
                 f"{paper.citekey}: skipped — collides with citekey "
                 f"{seen_citekeys_lower[lower]!r} on a case-insensitive filesystem"
             )
+            failed_citekeys.add(paper.citekey)
             continue
         seen_citekeys_lower[lower] = paper.citekey
         try:
             write_paper_note(config.vault_path, paper, fields, config.dry_run, counts)
         except OSError as exc:
             counts.errors.append(f"{paper.citekey}: {exc}")
+            failed_citekeys.add(paper.citekey)
             continue
         seen_citekeys.add(paper.citekey)
         seen_collections.update(paper.collections)
@@ -173,7 +181,10 @@ def run(config: Config) -> SyncCounts:
         write_index_note(config.vault_path, "collection", name, parent_name, config.dry_run, counts)
 
     if not config.collection:
-        for citekey in existing_paper_citekeys(config.vault_path) - seen_citekeys:
+        retire_candidates = (
+            existing_paper_citekeys(config.vault_path) - seen_citekeys - failed_citekeys
+        )
+        for citekey in retire_candidates:
             retire_note(config.vault_path, citekey, config.dry_run, counts)
 
     return counts
