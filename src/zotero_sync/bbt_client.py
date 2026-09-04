@@ -20,12 +20,26 @@ def _call(method: str, params: list) -> object:
     )
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
-            body = json.load(resp)
+            raw = resp.read()
+    except urllib.error.HTTPError as exc:
+        raw_body = exc.read().decode("utf-8", errors="replace")
+        raise ZoteroSyncError(
+            f"Better BibTeX's JSON-RPC endpoint returned HTTP {exc.code} for {method}:\n{raw_body}"
+        ) from exc
     except (urllib.error.URLError, ConnectionError, TimeoutError) as exc:
         raise PreconditionError(
             "Can't reach Zotero's Better BibTeX endpoint at "
             f"{RPC_URL} — make sure Zotero is running with the Better BibTeX "
             "plugin enabled."
+        ) from exc
+
+    try:
+        body = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raw_body = raw.decode("utf-8", errors="replace")
+        raise ZoteroSyncError(
+            "Better BibTeX's JSON-RPC endpoint returned a response that isn't "
+            f"valid JSON for {method}:\n{raw_body}"
         ) from exc
 
     if "error" in body:

@@ -5,7 +5,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from zotero_sync.errors import PreconditionError
+from zotero_sync.errors import PreconditionError, ZoteroSyncError
 
 # Zotero's local HTTP API always addresses the local user's library as
 # user id 0, regardless of the actual zotero.org account id — there is no
@@ -22,13 +22,26 @@ def _get(path: str, params: dict | None = None) -> object:
     req = urllib.request.Request(url, headers={"Accept": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
-            return json.load(resp)
+            raw = resp.read()
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        raise ZoteroSyncError(
+            f"Zotero's local API returned HTTP {exc.code} for {url}:\n{body}"
+        ) from exc
     except (urllib.error.URLError, ConnectionError, TimeoutError) as exc:
         raise PreconditionError(
             "Can't reach Zotero's local API at http://127.0.0.1:23119 — make "
             'sure Zotero is running and Settings > Advanced > "Allow other '
             'applications on this computer to communicate with Zotero" is '
             "enabled."
+        ) from exc
+
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as exc:
+        body = raw.decode("utf-8", errors="replace")
+        raise ZoteroSyncError(
+            f"Zotero's local API returned a response that isn't valid JSON for {url}:\n{body}"
         ) from exc
 
 
