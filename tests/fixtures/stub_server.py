@@ -82,7 +82,26 @@ class _Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_fault(self) -> bool:
+        """If the server has a fault installed (see ZoteroStubServer.set_fault,
+        added for #10's error-handling tests), serve it verbatim for any
+        request/path instead of the normal fixture-backed response, and
+        report that a fault was served so the caller returns early."""
+        fault = getattr(self.server, "fault", None)
+        if fault is None:
+            return False
+        status, body, content_type = fault
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+        return True
+
     def do_GET(self) -> None:  # noqa: N802
+        if self._send_fault():
+            return
+
         path = self.path.split("?", 1)[0]
 
         if path == "/api/users/0/items":
@@ -105,6 +124,9 @@ class _Handler(BaseHTTPRequestHandler):
         self._send_json({"error": f"stub: no route for GET {path}"}, status=404)
 
     def do_POST(self) -> None:  # noqa: N802
+        if self._send_fault():
+            return
+
         if self.path != "/better-bibtex/json-rpc":
             self._send_json({"error": f"stub: no route for POST {self.path}"}, status=404)
             return
@@ -150,11 +172,23 @@ class ZoteroStubServer:
 
     def __init__(self, host: str = "127.0.0.1", port: int = 0) -> None:
         self._httpd = HTTPServer((host, port), _Handler)
+        self._httpd.fault = None
         self._thread: threading.Thread | None = None
 
     @property
     def port(self) -> int:
         return self._httpd.server_address[1]
+
+    def set_fault(self, status: int, body: bytes, content_type: str = "text/html") -> None:
+        """Make every subsequent request (GET or POST, any path) return this
+        raw response instead of the normal fixture-backed one, until
+        clear_fault() is called. Added for #10 to exercise local_api.py's
+        and bbt_client.py's handling of real HTTP error responses and
+        non-JSON bodies (e.g. an HTML error page from a proxy/BBT)."""
+        self._httpd.fault = (status, body, content_type)
+
+    def clear_fault(self) -> None:
+        self._httpd.fault = None
 
     @property
     def local_api_base_url(self) -> str:
