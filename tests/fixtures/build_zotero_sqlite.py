@@ -123,9 +123,7 @@ def build(db_path: Path = DB_PATH) -> None:
     try:
         conn.execute("CREATE TABLE items (itemID INTEGER PRIMARY KEY, key TEXT NOT NULL)")
         conn.execute(
-            "CREATE TABLE itemAttachments ("
-            "itemID INTEGER PRIMARY KEY, parentItemID INTEGER"
-            ")"
+            "CREATE TABLE itemAttachments (itemID INTEGER PRIMARY KEY, parentItemID INTEGER)"
         )
         conn.execute(
             "CREATE TABLE itemAnnotations ("

@@ -93,9 +93,7 @@ class _Handler(BaseHTTPRequestHandler):
         if match:
             collection_key = match.group(1)
             filtered = [
-                item
-                for item in _ITEMS
-                if collection_key in item["data"].get("collections", [])
+                item for item in _ITEMS if collection_key in item["data"].get("collections", [])
             ]
             self._send_json(filtered)
             return
