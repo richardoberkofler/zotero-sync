@@ -1,0 +1,3 @@
+# Use Better BibTeX's own library ID (1), not the Zotero Local API's user ID, to address Citekeys
+
+Better BibTeX's JSON-RPC endpoint addresses libraries by its own internal library ID, which is unrelated to the numeric user ID the Zotero Local API returns on `items[].library.id`. Passing the Local API's user ID to BBT's `citationkeys` call silently returns no Citekeys rather than erroring, which would be confusing to debug. We hardcode `BBT_LIBRARY_ID = 1` — BBT's ID for "My Library," the default local library — since multi-library support is currently out of scope. If multi-library support is added later, this ID needs to come from BBT's own library-listing call instead of being assumed.
