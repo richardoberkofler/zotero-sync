@@ -28,6 +28,15 @@ def _yaml_list(values: list[str]) -> str:
     return "\n" + "\n".join(f"  - {_yaml_scalar(v)}" for v in values)
 
 
+def _slugify_tag(tag: str) -> str:
+    """Obsidian's native tags: frontmatter property rejects spaces (and most
+    punctuation) in tag names. Slugify for that field only — wikilinks and
+    index notes use the raw tag text elsewhere, since Obsidian links and
+    filenames allow spaces fine."""
+    slug = re.sub(r"[^a-z0-9/_]+", "-", tag.lower())
+    return slug.strip("-")
+
+
 def render_frontmatter(paper: Paper, fields: list[str]) -> str:
     values: dict[str, str] = {
         "title": _yaml_scalar(paper.title),
@@ -38,7 +47,7 @@ def render_frontmatter(paper: Paper, fields: list[str]) -> str:
         "url": _yaml_scalar(paper.url or ""),
         "citekey": _yaml_scalar(paper.citekey),
         "collections": _yaml_list(paper.collections),
-        "tags": _yaml_list(paper.tags),
+        "tags": _yaml_list([_slugify_tag(t) for t in paper.tags]),
         "date-added": _yaml_scalar(paper.date_added or ""),
         "date-modified": _yaml_scalar(paper.date_modified or ""),
         "abstract": _yaml_scalar(paper.abstract or ""),

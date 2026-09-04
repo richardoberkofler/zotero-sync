@@ -3,7 +3,7 @@ from __future__ import annotations
 import codecs
 
 from zotero_sync.model import Paper
-from zotero_sync.notes.paper import _yaml_scalar, render_frontmatter
+from zotero_sync.notes.paper import _slugify_tag, _yaml_scalar, render_frontmatter
 
 
 def _make_paper(**overrides) -> Paper:
@@ -83,6 +83,30 @@ def test_render_frontmatter_keeps_each_field_on_a_single_line():
     assert _unescape_double_quoted(scalar) == (
         "First paragraph.\nSecond paragraph.\nThird with a \\backslash\\."
     )
+
+
+def test_slugify_tag_replaces_spaces_with_hyphens():
+    assert _slugify_tag("INDUSTRIAL PLANTS") == "industrial-plants"
+
+
+def test_slugify_tag_collapses_space_hyphen_space():
+    assert _slugify_tag("MANAGEMENT - Information Systems") == "management-information-systems"
+
+
+def test_slugify_tag_lowercases():
+    assert _slugify_tag("ENTERPRISE INTEGRATION") == "enterprise-integration"
+
+
+def test_slugify_tag_preserves_nesting_slash():
+    assert _slugify_tag("Topic/Sub Topic") == "topic/sub-topic"
+
+
+def test_render_frontmatter_slugifies_tags_field():
+    paper = _make_paper(tags=["INDUSTRIAL PLANTS", "ENTERPRISE INTEGRATION"])
+    frontmatter = render_frontmatter(paper, ["tags"])
+    assert '"industrial-plants"' in frontmatter
+    assert '"enterprise-integration"' in frontmatter
+    assert '"INDUSTRIAL PLANTS"' not in frontmatter
 
 
 def test_render_frontmatter_parses_with_pyyaml_if_available():
