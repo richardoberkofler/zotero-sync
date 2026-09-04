@@ -23,6 +23,12 @@ class Annotation:
     color: str
     page_label: str
     sort_index: str
+    # One of "highlight", "underline", "note", "image" — see
+    # sync.ANNOTATION_TYPE_* for the zotero.sqlite integer codes this is
+    # derived from. Determines how notes/paper.py's render_annotations()
+    # renders the entry (highlight/underline wrap PDF text; note/image
+    # don't).
+    kind: str = "highlight"
 
 
 @dataclass

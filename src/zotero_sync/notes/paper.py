@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from zotero_sync.model import Paper
+from zotero_sync.model import Annotation, Paper
 
 LINKS_START = "<!-- zotero-sync:links:start -->"
 LINKS_END = "<!-- zotero-sync:links:end -->"
@@ -64,14 +64,30 @@ def render_links(paper: Paper) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_annotation_body(ann: Annotation) -> str:
+    # highlight/underline both wrap the PDF text they mark up; note/image
+    # don't have PDF text to wrap (ann.text is empty/None for them) — they
+    # get a standalone label instead. See model.Annotation.kind and
+    # sync.ANNOTATION_TYPE_KINDS for where `kind` comes from.
+    if ann.kind == "underline":
+        return (
+            f'<span style="text-decoration:underline; '
+            f'text-decoration-color:{ann.color};">{ann.text}</span>'
+        )
+    if ann.kind == "note":
+        return "📝 *Note annotation*"
+    if ann.kind == "image":
+        return "🖼️ *Image annotation*"
+    return f'<mark style="background-color:{ann.color};">{ann.text}</mark>'
+
+
 def render_annotations(paper: Paper) -> str:
     lines = [ANNOTATIONS_START, "## Annotations"]
     if not paper.annotations:
         lines.append("*No annotations yet.*")
     else:
         for ann in paper.annotations:
-            highlight = f'<mark style="background-color:{ann.color};">{ann.text}</mark>'
-            lines.append(f"- p. {ann.page_label}: {highlight}")
+            lines.append(f"- p. {ann.page_label}: {_render_annotation_body(ann)}")
             if ann.comment:
                 lines.append(f"  - ↳ {ann.comment}")
     lines.append(ANNOTATIONS_END)

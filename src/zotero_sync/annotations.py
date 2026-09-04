@@ -103,7 +103,10 @@ def item_ids_by_key(db_copy_path: Path, keys: list[str]) -> dict[str, int]:
 def read_annotations(db_copy_path: Path, paper_item_ids: dict[str, int]) -> dict[str, list[dict]]:
     """paper_item_ids: {citekey: internal Zotero itemID}. Returns
     {citekey: [annotation dicts]}, each annotation ordered by
-    (pageLabel, sortIndex) — reading order."""
+    (pageLabel, sortIndex) — reading order. Returns rows for every
+    itemAnnotations.type code (highlight, note, image, underline, ...);
+    filtering to the types zotero-sync actually renders is sync.py's job
+    (see sync.ANNOTATION_TYPE_KINDS)."""
     conn = sqlite3.connect(f"file:{db_copy_path}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     try:

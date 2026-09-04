@@ -12,15 +12,18 @@ issues #5 and #6, which consume these).
   `build_zotero_sqlite.py`, checked in as binary) containing the minimal
   `items` / `itemAttachments` / `itemAnnotations` tables/columns that
   `annotations.py` reads. 3 paper items (libraryID 1, "My Library"), one PDF
-  attachment each, and 4 annotations on two of them: 2 highlights + 1
-  non-highlight (type=2, e.g. a sticky note) on the first paper, 1 highlight
-  on the second, and zero annotations on the third. The non-highlight row
-  exists specifically to prove `sync.ANNOTATION_TYPE_HIGHLIGHT` filtering
-  works. It also has a 4th item (itemID 999, libraryID 2) that deliberately
-  reuses paper 1's key ("AAAA1111") to stand in for a group library synced
-  locally alongside "My Library" — and its own decoy annotation — to prove
-  `annotations.item_ids_by_key()`'s `libraryID` scoping keeps it from being
-  collapsed onto / misrouted into paper 1's data (issue #12).
+  attachment each, and 6 annotations across two of them: on the first paper,
+  2 highlights, 1 note (type=2), 1 underline (type=5), and 1 image (type=3);
+  on the second, 1 highlight; the third has zero annotations. The note/
+  underline/image rows exist specifically to prove `sync.ANNOTATION_TYPE_
+  KINDS` extracts and distinguishes each extracted type (issue #18) — ink
+  (type=4) and text (type=6) annotations are deliberately not included since
+  zotero-sync doesn't extract them. It also has a 4th item (itemID 999,
+  libraryID 2) that deliberately reuses paper 1's key ("AAAA1111") to stand
+  in for a group library synced locally alongside "My Library" — and its own
+  decoy annotation — to prove `annotations.item_ids_by_key()`'s `libraryID`
+  scoping keeps it from being collapsed onto / misrouted into paper 1's data
+  (issue #12).
 - `build_zotero_sqlite.py` — the generator for `zotero.sqlite`. Rerun it
   (`python tests/fixtures/build_zotero_sqlite.py`) to regenerate the file
   after editing the DATA constants in that script. Its module docstring

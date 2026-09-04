@@ -102,11 +102,27 @@ def build_papers(
     return papers, {"names": collection_names, "parents": collection_parents}
 
 
-# zotero.sqlite's itemAnnotations.type is an integer code, not a string;
-# 1 = highlight (confirmed by inspecting a live database, since it isn't
-# documented anywhere — see research/01-zotero-access-method-findings.md §2
-# on this table's schema being unstable/undocumented across releases).
+# zotero.sqlite's itemAnnotations.type is an integer code, not a string.
+# Confirmed against Zotero's own client source (chrome/content/zotero/xpcom/
+# annotations.js's ANNOTATION_TYPE_* constants, since this table isn't
+# documented anywhere else — see research/01-zotero-access-method-findings.md
+# §2 on this table's schema being unstable/undocumented across releases):
+#   1 = highlight, 2 = note, 3 = image, 4 = ink, 5 = underline, 6 = text.
+# We extract highlight/note/image/underline (issue #18); ink and text
+# annotations aren't handled yet — out of scope for #18, left as a gap.
 ANNOTATION_TYPE_HIGHLIGHT = 1
+ANNOTATION_TYPE_NOTE = 2
+ANNOTATION_TYPE_IMAGE = 3
+ANNOTATION_TYPE_UNDERLINE = 5
+
+# Maps the zotero.sqlite integer type code to the Annotation.kind string
+# notes/paper.py's render_annotations() branches on.
+ANNOTATION_TYPE_KINDS = {
+    ANNOTATION_TYPE_HIGHLIGHT: "highlight",
+    ANNOTATION_TYPE_NOTE: "note",
+    ANNOTATION_TYPE_IMAGE: "image",
+    ANNOTATION_TYPE_UNDERLINE: "underline",
+}
 
 
 def attach_annotations(papers: list[Paper], db_copy_path) -> None:
@@ -121,9 +137,10 @@ def attach_annotations(papers: list[Paper], db_copy_path) -> None:
                 color=row["color"] or "#ffd400",
                 page_label=row["pageLabel"] or "?",
                 sort_index=row["sortIndex"] or "",
+                kind=ANNOTATION_TYPE_KINDS[row["type"]],
             )
             for row in rows
-            if row["type"] == ANNOTATION_TYPE_HIGHLIGHT
+            if row["type"] in ANNOTATION_TYPE_KINDS
         ]
 
 
