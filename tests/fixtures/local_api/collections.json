@@ -1,0 +1,24 @@
+[
+  {
+    "key": "RES00001",
+    "version": 11,
+    "library": { "type": "user", "id": 0, "name": "My Library" },
+    "data": {
+      "key": "RES00001",
+      "version": 11,
+      "name": "Research",
+      "parentCollection": false
+    }
+  },
+  {
+    "key": "SUB00002",
+    "version": 12,
+    "library": { "type": "user", "id": 0, "name": "My Library" },
+    "data": {
+      "key": "SUB00002",
+      "version": 12,
+      "name": "Machine Learning",
+      "parentCollection": "RES00001"
+    }
+  }
+]
