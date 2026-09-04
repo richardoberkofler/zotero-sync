@@ -1,0 +1,9 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "1:AAAA1111": "smith2020neural",
+    "1:BBBB2222": "jones2019language",
+    "1:CCCC3333": "lee2021optimization"
+  }
+}

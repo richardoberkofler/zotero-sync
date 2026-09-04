@@ -1,0 +1,108 @@
+[
+  {
+    "key": "AAAA1111",
+    "version": 101,
+    "library": { "type": "user", "id": 0, "name": "My Library" },
+    "data": {
+      "key": "AAAA1111",
+      "version": 101,
+      "itemType": "journalArticle",
+      "title": "Neural Representations for Structured Data",
+      "creators": [
+        { "creatorType": "author", "firstName": "Ada", "lastName": "Smith" },
+        { "creatorType": "author", "firstName": "Bo", "lastName": "Nguyen" }
+      ],
+      "date": "2020-03-15",
+      "DOI": "10.1000/neural-rep-2020",
+      "url": "https://example.org/papers/neural-rep-2020",
+      "abstractNote": "We study representation learning for structured data and show that ...",
+      "dateAdded": "2020-04-01T10:00:00Z",
+      "dateModified": "2020-04-02T09:30:00Z",
+      "collections": ["RES00001"],
+      "tags": [
+        { "tag": "neural-networks", "type": 0 },
+        { "tag": "auto-imported", "type": 1 }
+      ]
+    }
+  },
+  {
+    "key": "BBBB2222",
+    "version": 102,
+    "library": { "type": "user", "id": 0, "name": "My Library" },
+    "data": {
+      "key": "BBBB2222",
+      "version": 102,
+      "itemType": "conferencePaper",
+      "title": "A Survey of Language Model Evaluation",
+      "creators": [
+        { "creatorType": "author", "name": "Cy Jones" }
+      ],
+      "date": "2019-11-08",
+      "DOI": "10.1000/lm-eval-2019",
+      "url": "https://example.org/papers/lm-eval-2019",
+      "abstractNote": "This survey covers evaluation methodology for language models ...",
+      "dateAdded": "2019-12-01T08:15:00Z",
+      "dateModified": "2019-12-05T14:45:00Z",
+      "collections": ["SUB00002"],
+      "tags": [
+        { "tag": "nlp" }
+      ]
+    }
+  },
+  {
+    "key": "CCCC3333",
+    "version": 103,
+    "library": { "type": "user", "id": 0, "name": "My Library" },
+    "data": {
+      "key": "CCCC3333",
+      "version": 103,
+      "itemType": "bookSection",
+      "title": "Chapter 4: Optimization Landscapes",
+      "creators": [
+        { "creatorType": "author", "firstName": "Dee", "lastName": "Lee" },
+        { "creatorType": "editor", "firstName": "Evan", "lastName": "Park" }
+      ],
+      "date": "2021-06-01",
+      "DOI": null,
+      "url": null,
+      "abstractNote": null,
+      "dateAdded": "2021-06-10T12:00:00Z",
+      "dateModified": "2021-06-10T12:00:00Z",
+      "collections": [],
+      "tags": []
+    }
+  },
+  {
+    "key": "EEEE5555",
+    "version": 104,
+    "library": { "type": "user", "id": 0, "name": "My Library" },
+    "data": {
+      "key": "EEEE5555",
+      "version": 104,
+      "itemType": "note",
+      "note": "<p>A free-floating note, not a bibliographic item.</p>",
+      "dateAdded": "2020-04-03T10:00:00Z",
+      "dateModified": "2020-04-03T10:00:00Z",
+      "collections": [],
+      "tags": []
+    }
+  },
+  {
+    "key": "FFFF6666",
+    "version": 105,
+    "library": { "type": "user", "id": 0, "name": "My Library" },
+    "data": {
+      "key": "FFFF6666",
+      "version": 105,
+      "itemType": "attachment",
+      "linkMode": "imported_file",
+      "title": "neural-rep-2020.pdf",
+      "contentType": "application/pdf",
+      "parentItem": "AAAA1111",
+      "dateAdded": "2020-04-01T10:05:00Z",
+      "dateModified": "2020-04-01T10:05:00Z",
+      "collections": [],
+      "tags": []
+    }
+  }
+]
