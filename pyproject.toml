@@ -1,0 +1,16 @@
+[project]
+name = "zotero-sync"
+version = "0.1.0"
+description = "Sync a Zotero library into an Obsidian vault as an interconnected note graph."
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+zotero-sync = "zotero_sync.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
