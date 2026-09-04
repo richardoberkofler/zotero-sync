@@ -90,7 +90,11 @@ def load_or_init_config(vault_path: Path) -> tuple[Config, bool]:
         path.write_text(DEFAULT_CONFIG_TEMPLATE, encoding="utf-8")
         generated = True
 
-    data = tomllib.loads(path.read_text(encoding="utf-8"))
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except tomllib.TOMLDecodeError as exc:
+        raise ZoteroSyncError(f"Failed to parse {path}: {exc}") from exc
+
     return (
         Config(
             vault_path=vault_path,
