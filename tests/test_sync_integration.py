@@ -89,11 +89,11 @@ def test_sync_run_writes_paper_and_collection_notes(zotero_stub, zotero_sqlite_c
     assert 'year: "2020"' in smith
     assert 'type: "journalArticle"' in smith
     assert "Collections: [[Research]]" in smith
-    # 2 highlights should be rendered; the sticky-note (type=2) annotation
-    # must be filtered out per ANNOTATION_TYPE_HIGHLIGHT.
+    # 2 highlights plus the note/underline/image annotations added by #18
+    # should all be rendered.
     assert "Deep learning models require large amounts" in smith
     assert "The optimization landscape is non-convex" in smith
-    assert "Follow up on this citation later." not in smith
+    assert "Follow up on this citation later." in smith
 
     jones = (papers_dir / "jones2019language.md").read_text(encoding="utf-8")
     assert 'citekey: "jones2019language"' in jones
