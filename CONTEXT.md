@@ -9,7 +9,7 @@ A top-level bibliographic item from Zotero (article, book, webpage, report, etc.
 _Avoid_: Paper, Item
 
 **Annotation**:
-Any markup a user makes on a PDF in Zotero — highlight, note, underline, or image. Only highlight-type annotations are currently extracted and rendered; the others are a known gap, not a deliberate exclusion.
+Any markup a user makes on a PDF in Zotero — highlight, note, underline, or image. All four are extracted and rendered (issue #18); ink and text annotation types exist in Zotero too but aren't extracted (out of scope).
 _Avoid_: Highlight (too narrow — a Highlight is one kind of Annotation, not the whole concept)
 
 **Citekey**:

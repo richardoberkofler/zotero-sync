@@ -31,16 +31,20 @@ not from official docs):
   not the paper. read_annotations()'s query joins through both:
   itemAnnotations.parentItemID -> itemAttachments.itemID, then filters on
   itemAttachments.parentItemID (the paper's itemID). `type` is an integer
-  code; 1 = highlight (ANNOTATION_TYPE_HIGHLIGHT in sync.py). Other codes
-  (e.g. 2 here, standing in for a sticky "note" annotation) exist too and
-  must NOT be treated as highlights.
+  code, confirmed against Zotero's own client source (see sync.py's
+  ANNOTATION_TYPE_* constants and ANNOTATION_TYPE_KINDS): 1 = highlight,
+  2 = note, 3 = image, 5 = underline (4 = ink and 6 = text exist in real
+  Zotero data too, but zotero-sync doesn't extract them — out of scope for
+  issue #18). This fixture includes one row of each of the four extracted
+  types so tests can prove each is pulled through and rendered distinctly.
 
 Item keys/ids are kept consistent with tests/fixtures/local_api/items.json
 and tests/fixtures/bbt/citationkeys.json so all three fixtures compose into
 one coherent fake library:
 
   itemID  key        libraryID  citekey (via BBT)      attachment  annotations
-  1       AAAA1111   1          smith2020neural        101         2 highlights + 1 non-highlight
+  1       AAAA1111   1          smith2020neural        101         2 highlights, 1 note,
+                                                                    1 underline, 1 image
   2       BBBB2222   1          jones2019language      102         1 highlight
   3       CCCC3333   1          lee2021optimization    103         (none)
   999     AAAA1111   2          (not synced — decoy)   401         1 highlight (must never surface)
@@ -124,6 +128,28 @@ ITEM_ANNOTATIONS = [
         "14",
         "00001|000140|00000",
         "{}",
+    ),
+    (
+        205,
+        101,
+        5,  # underline
+        "This sentence is underlined rather than highlighted.",
+        None,
+        "#a28ae5",
+        "15",
+        "00001|000150|00000",
+        '{"pageIndex": 14, "rects": [[100, 500, 300, 520]]}',
+    ),
+    (
+        206,
+        101,
+        3,  # image — no PDF text, only an optional comment
+        None,
+        "Screenshot of the results table.",
+        "#f19837",
+        "16",
+        "00001|000160|00000",
+        '{"pageIndex": 15, "rects": [[50, 50, 400, 300]]}',
     ),
     (
         204,
