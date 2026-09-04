@@ -1,6 +1,6 @@
 # zotero-sync
 
-Sync a [Zotero](https://www.zotero.org/) library into an [Obsidian](https://obsidian.md/) vault as an interconnected note graph — one note per paper, plus index notes for collections, authors, and keywords, all cross-linked.
+Sync a [Zotero](https://www.zotero.org/) library into an [Obsidian](https://obsidian.md/) vault as an interconnected note graph — one note per paper, plus index notes for collections, cross-linked. Paper notes also carry `[[Author Name]]` / `[[Keyword]]` wikilinks, but no Author/Keyword index notes are generated for them to point at.
 
 ## How it works
 
@@ -37,7 +37,7 @@ Run from inside the vault to sync to the current directory, or pass `--vault`. O
 | --- | --- |
 | `--vault PATH` | Obsidian vault path (default: current directory) |
 | `--collection NAME` | Restrict the sync to one Zotero collection (default: whole library) |
-| `--include-auto-tags` | Include Zotero's automatically-derived tags in keyword index notes |
+| `--include-auto-tags` | Include Zotero's automatically-derived tags on paper notes |
 | `--dry-run` | Report what would change without writing anything |
 
 The first run writes a `.zotero-sync.toml` config file into the vault with the same settings (plus a `frontmatter` option controlling which fields are written: `"slim"`, `"full"`, or an explicit list). CLI flags override the config file for a single run.
