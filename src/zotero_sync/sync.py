@@ -4,7 +4,13 @@ from zotero_sync import annotations, bbt_client, local_api
 from zotero_sync.config import Config
 from zotero_sync.errors import ZoteroSyncError
 from zotero_sync.model import Annotation, Paper
-from zotero_sync.vault import SyncCounts, existing_paper_citekeys, retire_note, write_index_note, write_paper_note
+from zotero_sync.vault import (
+    SyncCounts,
+    existing_paper_citekeys,
+    retire_note,
+    write_index_note,
+    write_paper_note,
+)
 
 AUTOMATIC_TAG_TYPE = 1
 # Better BibTeX's JSON-RPC addresses libraries by its own internal library

@@ -78,7 +78,6 @@ class Config:
         )
 
 
-
 def config_path(vault_path: Path) -> Path:
     return vault_path / CONFIG_FILENAME
 

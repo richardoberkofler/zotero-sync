@@ -10,9 +10,7 @@ ANNOTATIONS_START = "<!-- zotero-sync:annotations:start -->"
 ANNOTATIONS_END = "<!-- zotero-sync:annotations:end -->"
 
 _FRONTMATTER_RE = re.compile(r"\A---\n.*?\n---\n?", re.DOTALL)
-_LINKS_RE = re.compile(
-    re.escape(LINKS_START) + r".*?" + re.escape(LINKS_END), re.DOTALL
-)
+_LINKS_RE = re.compile(re.escape(LINKS_START) + r".*?" + re.escape(LINKS_END), re.DOTALL)
 _ANNOTATIONS_RE = re.compile(
     re.escape(ANNOTATIONS_START) + r".*?" + re.escape(ANNOTATIONS_END), re.DOTALL
 )
@@ -56,9 +54,7 @@ def render_frontmatter(paper: Paper, fields: list[str]) -> str:
 def render_links(paper: Paper) -> str:
     lines = [LINKS_START]
     if paper.collections:
-        lines.append(
-            "Collections: " + ", ".join(f"[[{c}]]" for c in paper.collections)
-        )
+        lines.append("Collections: " + ", ".join(f"[[{c}]]" for c in paper.collections))
     if paper.authors:
         lines.append("Authors: " + ", ".join(f"[[{a}]]" for a in paper.authors))
     if paper.tags:
@@ -83,10 +79,7 @@ def render_annotations(paper: Paper) -> str:
 
 def render_new_note(paper: Paper, fields: list[str]) -> str:
     return (
-        render_frontmatter(paper, fields)
-        + render_links(paper)
-        + "\n"
-        + render_annotations(paper)
+        render_frontmatter(paper, fields) + render_links(paper) + "\n" + render_annotations(paper)
     )
 
 

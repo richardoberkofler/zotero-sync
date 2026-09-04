@@ -57,9 +57,7 @@ def write_paper_note(
     path = paper_note_path(vault_path, paper.citekey)
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
-        new_text = paper_notes.update_existing_note(
-            path.read_text(encoding="utf-8"), paper, fields
-        )
+        new_text = paper_notes.update_existing_note(path.read_text(encoding="utf-8"), paper, fields)
         action = "updated"
     else:
         new_text = paper_notes.render_new_note(paper, fields)
@@ -76,7 +74,10 @@ def write_index_note(
     action = "updated" if path.exists() else "created"
     if not dry_run:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(index_notes.render_index_note(kind=kind, title=title, parent=parent), encoding="utf-8")
+        path.write_text(
+            index_notes.render_index_note(kind=kind, title=title, parent=parent),
+            encoding="utf-8",
+        )
     counts.bump(kind.capitalize() + "s", action)
 
 

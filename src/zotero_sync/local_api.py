@@ -23,8 +23,8 @@ def _get(path: str, params: dict | None = None) -> object:
     except (urllib.error.URLError, ConnectionError, TimeoutError) as exc:
         raise PreconditionError(
             "Can't reach Zotero's local API at http://127.0.0.1:23119 — make "
-            "sure Zotero is running and Settings > Advanced > \"Allow other "
-            "applications on this computer to communicate with Zotero\" is "
+            'sure Zotero is running and Settings > Advanced > "Allow other '
+            'applications on this computer to communicate with Zotero" is '
             "enabled."
         ) from exc
 
