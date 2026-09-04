@@ -9,6 +9,13 @@ from pathlib import Path
 
 from zotero_sync.errors import PreconditionError, SchemaDriftError
 
+# zotero.sqlite's own `libraryID` for the default local library ("My
+# Library") — mirrors sync.py's BBT_LIBRARY_ID assumption that zotero-sync
+# only targets library id 1 (multi-library support is out of scope). Not
+# imported from sync.py to avoid a circular import (sync.py imports this
+# module).
+ZOTERO_LIBRARY_ID = 1
+
 # Per research/01-zotero-access-method-findings.md §2: zotero.sqlite's schema
 # is not guaranteed stable across Zotero releases, so we verify these columns
 # exist before trusting any read of them, and fail loudly on drift rather
@@ -79,11 +86,14 @@ def item_ids_by_key(db_copy_path: Path, keys: list[str]) -> dict[str, int]:
     conn = sqlite3.connect(f"file:{db_copy_path}?mode=ro", uri=True)
     try:
         # `key` is only unique within a single library, not across the whole
-        # database — this assumes the default single-library setup (mirrors
-        # sync.py's BBT_LIBRARY_ID assumption) and doesn't scope by libraryID.
+        # database — a group library synced locally alongside "My Library"
+        # could have an item sharing the same `key` string as a personal
+        # library item. Scope to ZOTERO_LIBRARY_ID so dict(rows) can't
+        # collapse two different items' rows into one arbitrary itemID.
         placeholders = ",".join("?" * len(keys))
         rows = conn.execute(
-            f"SELECT key, itemID FROM items WHERE key IN ({placeholders})", keys
+            f"SELECT key, itemID FROM items WHERE key IN ({placeholders}) AND libraryID = ?",
+            [*keys, ZOTERO_LIBRARY_ID],
         ).fetchall()
         return dict(rows)
     finally:
