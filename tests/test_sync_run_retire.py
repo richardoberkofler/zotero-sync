@@ -68,7 +68,7 @@ def test_oserror_during_write_does_not_retire_existing_note(monkeypatch, vault, 
     # with an OSError this run (e.g. a transient file-lock/permission issue).
     _write_stub_note(vault, "errpaper2020")
     papers = [_paper("alive2020"), _paper("errpaper2020")]
-    monkeypatch.setattr(sync, "build_papers", lambda config, db_copy: (papers, {}))
+    monkeypatch.setattr(sync, "build_papers", lambda config, db_copy, counts=None: (papers, {}))
 
     def fake_write_paper_note(vault_path, paper, fields, dry_run, counts):
         if paper.citekey == "errpaper2020":
@@ -95,7 +95,7 @@ def test_case_collision_does_not_retire_existing_note(monkeypatch, vault, no_net
     # not be retired.
     _write_stub_note(vault, "coll2020")
     papers = [_paper("Coll2020"), _paper("coll2020")]
-    monkeypatch.setattr(sync, "build_papers", lambda config, db_copy: (papers, {}))
+    monkeypatch.setattr(sync, "build_papers", lambda config, db_copy, counts=None: (papers, {}))
 
     config = Config(vault_path=vault)
     counts = sync.run(config)
@@ -112,7 +112,7 @@ def test_paper_genuinely_absent_from_library_is_still_retired(monkeypatch, vault
     # error, no collision) should still be trashed.
     _write_stub_note(vault, "gone2019")
     papers: list[Paper] = []
-    monkeypatch.setattr(sync, "build_papers", lambda config, db_copy: (papers, {}))
+    monkeypatch.setattr(sync, "build_papers", lambda config, db_copy, counts=None: (papers, {}))
 
     config = Config(vault_path=vault)
     counts = sync.run(config)
