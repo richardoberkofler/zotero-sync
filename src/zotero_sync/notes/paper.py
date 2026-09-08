@@ -6,11 +6,14 @@ from zotero_sync.model import Annotation, Paper
 
 LINKS_START = "<!-- zotero-sync:links:start -->"
 LINKS_END = "<!-- zotero-sync:links:end -->"
+ABSTRACT_START = "<!-- zotero-sync:abstract:start -->"
+ABSTRACT_END = "<!-- zotero-sync:abstract:end -->"
 ANNOTATIONS_START = "<!-- zotero-sync:annotations:start -->"
 ANNOTATIONS_END = "<!-- zotero-sync:annotations:end -->"
 
 _FRONTMATTER_RE = re.compile(r"\A---\n.*?\n---\n?", re.DOTALL)
 _LINKS_RE = re.compile(re.escape(LINKS_START) + r".*?" + re.escape(LINKS_END), re.DOTALL)
+_ABSTRACT_RE = re.compile(re.escape(ABSTRACT_START) + r".*?" + re.escape(ABSTRACT_END), re.DOTALL)
 _ANNOTATIONS_RE = re.compile(
     re.escape(ANNOTATIONS_START) + r".*?" + re.escape(ANNOTATIONS_END), re.DOTALL
 )
@@ -50,7 +53,6 @@ def render_frontmatter(paper: Paper, fields: list[str]) -> str:
         "tags": _yaml_list([_slugify_tag(t) for t in paper.tags]),
         "date-added": _yaml_scalar(paper.date_added or ""),
         "date-modified": _yaml_scalar(paper.date_modified or ""),
-        "abstract": _yaml_scalar(paper.abstract or ""),
         **{k: _yaml_scalar(v) for k, v in paper.extra_fields.items()},
     }
     lines = ["---"]
@@ -70,6 +72,13 @@ def render_links(paper: Paper) -> str:
     if paper.tags:
         lines.append("Keywords: " + ", ".join(f"[[{t}]]" for t in paper.tags))
     lines.append(LINKS_END)
+    return "\n".join(lines) + "\n"
+
+
+def render_abstract(paper: Paper) -> str:
+    lines = [ABSTRACT_START, "## Abstract"]
+    lines.append(paper.abstract if paper.abstract else "*No abstract.*")
+    lines.append(ABSTRACT_END)
     return "\n".join(lines) + "\n"
 
 
@@ -105,13 +114,18 @@ def render_annotations(paper: Paper) -> str:
 
 def render_new_note(paper: Paper, fields: list[str]) -> str:
     return (
-        render_frontmatter(paper, fields) + render_links(paper) + "\n" + render_annotations(paper)
+        render_frontmatter(paper, fields)
+        + render_links(paper)
+        + "\n"
+        + render_abstract(paper)
+        + "\n"
+        + render_annotations(paper)
     )
 
 
 def update_existing_note(existing_text: str, paper: Paper, fields: list[str]) -> str:
-    """Regenerates the frontmatter, links, and annotations blocks in place;
-    leaves everything else (the freeform region) untouched."""
+    """Regenerates the frontmatter, links, abstract, and annotations blocks in
+    place; leaves everything else (the freeform region) untouched."""
     text = existing_text
     if _FRONTMATTER_RE.search(text):
         text = _FRONTMATTER_RE.sub(render_frontmatter(paper, fields), text, count=1)
@@ -122,6 +136,11 @@ def update_existing_note(existing_text: str, paper: Paper, fields: list[str]) ->
         text = _LINKS_RE.sub(render_links(paper).rstrip("\n"), text, count=1)
     else:
         text = text.rstrip("\n") + "\n\n" + render_links(paper)
+
+    if _ABSTRACT_RE.search(text):
+        text = _ABSTRACT_RE.sub(render_abstract(paper).rstrip("\n"), text, count=1)
+    else:
+        text = text.rstrip("\n") + "\n\n" + render_abstract(paper)
 
     if _ANNOTATIONS_RE.search(text):
         text = _ANNOTATIONS_RE.sub(render_annotations(paper).rstrip("\n"), text, count=1)

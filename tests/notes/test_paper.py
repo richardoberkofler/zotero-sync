@@ -3,7 +3,14 @@ from __future__ import annotations
 import codecs
 
 from zotero_sync.model import Paper
-from zotero_sync.notes.paper import _slugify_tag, _yaml_scalar, render_frontmatter
+from zotero_sync.notes.paper import (
+    ABSTRACT_END,
+    ABSTRACT_START,
+    _slugify_tag,
+    _yaml_scalar,
+    render_abstract,
+    render_frontmatter,
+)
 
 
 def _make_paper(**overrides) -> Paper:
@@ -60,15 +67,12 @@ def test_yaml_scalar_round_trips_mixed_content():
 
 
 def test_render_frontmatter_keeps_each_field_on_a_single_line():
-    paper = _make_paper(
-        abstract="First paragraph.\nSecond paragraph.\r\nThird with a \\backslash\\.",
-        title='A "quoted" title',
-    )
-    fields = ["title", "abstract", "citekey"]
+    paper = _make_paper(title='A "quoted" title\nwith an embedded\r\nnewline')
+    fields = ["title", "citekey"]
     frontmatter = render_frontmatter(paper, fields)
 
     body_lines = frontmatter.strip("\n").split("\n")
-    # ---, title, abstract, citekey, --- => 5 lines, one per field plus fences
+    # ---, title, citekey, --- => 4 lines, one per field plus fences
     assert body_lines[0] == "---"
     assert body_lines[-1] == "---"
     field_lines = body_lines[1:-1]
@@ -78,11 +82,27 @@ def test_render_frontmatter_keeps_each_field_on_a_single_line():
         # single physical line.
         assert "\n" not in line
 
-    abstract_line = next(line for line in field_lines if line.startswith("abstract:"))
-    _, _, scalar = abstract_line.partition(": ")
-    assert _unescape_double_quoted(scalar) == (
-        "First paragraph.\nSecond paragraph.\nThird with a \\backslash\\."
+
+def test_render_frontmatter_omits_abstract_even_when_listed():
+    paper = _make_paper(abstract="Some abstract text.")
+    frontmatter = render_frontmatter(paper, ["title", "abstract", "citekey"])
+    assert "abstract" not in frontmatter
+
+
+def test_render_abstract_wraps_text_in_markers():
+    paper = _make_paper(
+        abstract="First paragraph.\nSecond paragraph.\r\nThird with a \\backslash\\."
     )
+    block = render_abstract(paper)
+    assert block.startswith(ABSTRACT_START)
+    assert block.rstrip("\n").endswith(ABSTRACT_END)
+    assert "First paragraph.\nSecond paragraph.\r\nThird with a \\backslash\\." in block
+
+
+def test_render_abstract_placeholder_when_missing():
+    paper = _make_paper(abstract=None)
+    block = render_abstract(paper)
+    assert "*No abstract.*" in block
 
 
 def test_slugify_tag_replaces_spaces_with_hyphens():
@@ -115,13 +135,9 @@ def test_render_frontmatter_parses_with_pyyaml_if_available():
     except ImportError:
         return
 
-    paper = _make_paper(
-        abstract='Multi\nline "abstract" with a \\ backslash.',
-        title="Normal Title",
-    )
-    fields = ["title", "abstract", "citekey", "year"]
+    paper = _make_paper(title='Multi\nline "title" with a \\ backslash.')
+    fields = ["title", "citekey", "year"]
     frontmatter = render_frontmatter(paper, fields)
     text = frontmatter.strip("-\n")
     parsed = yaml.safe_load(text)
-    assert parsed["abstract"] == 'Multi\nline "abstract" with a \\ backslash.'
-    assert parsed["title"] == "Normal Title"
+    assert parsed["title"] == 'Multi\nline "title" with a \\ backslash.'

@@ -24,9 +24,10 @@ DEFAULT_CONFIG_TEMPLATE = """\
 include_auto_tags = false
 
 # Frontmatter field set for paper notes: "slim" (title/authors/year/type/
-# doi/url/citekey/collections/tags/date-added/date-modified/abstract),
+# doi/url/citekey/collections/tags/date-added/date-modified),
 # "full" (adds volume/issue/pages/container-title/publisher/isbn/issn), or
 # an explicit array of field names, e.g. ["title", "authors", "citekey"].
+# The abstract is rendered as its own block in the note body, not frontmatter.
 frontmatter = "slim"
 
 # Directory containing zotero.sqlite (Zotero's data directory, not the
@@ -48,7 +49,6 @@ FRONTMATTER_SLIM = [
     "tags",
     "date-added",
     "date-modified",
-    "abstract",
 ]
 
 FRONTMATTER_FULL = FRONTMATTER_SLIM + [
