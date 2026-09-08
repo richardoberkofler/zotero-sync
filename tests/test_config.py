@@ -34,6 +34,7 @@ def test_load_or_init_config_defaults_when_file_exists_but_is_empty(tmp_path: Pa
     assert config.collection is None
     assert config.include_auto_tags is False
     assert config.frontmatter == "slim"
+    assert config.zotero_dir is None
     assert config.dry_run is False
 
 
@@ -52,6 +53,16 @@ def test_load_or_init_config_reads_overrides_from_existing_file(tmp_path: Path) 
     assert config.collection == "My Collection"
     assert config.include_auto_tags is True
     assert config.frontmatter == ["title", "citekey"]
+
+
+def test_load_or_init_config_reads_zotero_dir_from_existing_file(tmp_path: Path) -> None:
+    config_file = tmp_path / CONFIG_FILENAME
+    config_file.write_text('zotero_dir = "/custom/Zotero"\n', encoding="utf-8")
+
+    config, generated = load_or_init_config(tmp_path)
+
+    assert generated is False
+    assert config.zotero_dir == Path("/custom/Zotero")
 
 
 def test_load_or_init_config_raises_zotero_sync_error_on_malformed_toml(

@@ -53,6 +53,15 @@ def default_zotero_sqlite_path() -> Path | None:
     return None
 
 
+def zotero_sqlite_path(zotero_dir: Path | None) -> Path | None:
+    """Resolves zotero.sqlite's path, preferring a configured Zotero data
+    directory over autodetection."""
+    if zotero_dir is not None:
+        path = zotero_dir / "zotero.sqlite"
+        return path if path.exists() else None
+    return default_zotero_sqlite_path()
+
+
 def copy_database(source: Path) -> Path:
     """Copies zotero.sqlite to a temp file so we never read the live,
     potentially-locked file (per research/01-zotero-access-method-findings.md §2)."""

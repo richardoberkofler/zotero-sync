@@ -28,6 +28,12 @@ include_auto_tags = false
 # "full" (adds volume/issue/pages/container-title/publisher/isbn/issn), or
 # an explicit array of field names, e.g. ["title", "authors", "citekey"].
 frontmatter = "slim"
+
+# Directory containing zotero.sqlite (Zotero's data directory, not the
+# storage/ subfolder). Leave commented out to use Zotero's default location
+# for this OS. Only needed if Zotero is configured to use a custom data
+# directory.
+# zotero_dir = "/path/to/Zotero"
 """
 
 FRONTMATTER_SLIM = [
@@ -62,6 +68,7 @@ class Config:
     collection: str | None = None
     include_auto_tags: bool = False
     frontmatter: str | list[str] = "slim"
+    zotero_dir: Path | None = None
     dry_run: bool = False
 
     @property
@@ -95,12 +102,15 @@ def load_or_init_config(vault_path: Path) -> tuple[Config, bool]:
     except tomllib.TOMLDecodeError as exc:
         raise ZoteroSyncError(f"Failed to parse {path}: {exc}") from exc
 
+    zotero_dir = data.get("zotero_dir")
+
     return (
         Config(
             vault_path=vault_path,
             collection=data.get("collection"),
             include_auto_tags=bool(data.get("include_auto_tags", False)),
             frontmatter=data.get("frontmatter", "slim"),
+            zotero_dir=Path(zotero_dir) if zotero_dir is not None else None,
         ),
         generated,
     )

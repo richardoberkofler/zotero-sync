@@ -149,8 +149,13 @@ def run(config: Config) -> SyncCounts:
 
     counts = SyncCounts()
 
-    source_db = annotations.default_zotero_sqlite_path()
+    source_db = annotations.zotero_sqlite_path(config.zotero_dir)
     if source_db is None:
+        if config.zotero_dir is not None:
+            raise ZoteroSyncError(
+                f"Couldn't find zotero.sqlite in the configured zotero_dir "
+                f"({config.zotero_dir}) — check the path in .zotero-sync.toml."
+            )
         raise ZoteroSyncError(
             "Couldn't find zotero.sqlite in its default location — has "
             "Zotero been run at least once on this machine?"
