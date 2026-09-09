@@ -85,7 +85,7 @@ def test_run_writes_index_notes_for_every_ancestor_collection(monkeypatch, vault
     assert 'parent: "B"' in _parent_field("C")
     assert 'parent: "A"' in _parent_field("B")
     assert 'parent: "Root"' in _parent_field("A")
-    assert _parent_field("Root") == 'parent:' or 'parent: "' not in _parent_field("Root")
+    assert _parent_field("Root") == "parent:" or 'parent: "' not in _parent_field("Root")
 
     assert counts.created.get("Collections") == 4
 
