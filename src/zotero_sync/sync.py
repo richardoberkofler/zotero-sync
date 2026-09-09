@@ -39,6 +39,24 @@ def _collection_maps() -> tuple[dict[str, str], dict[str, str | None]]:
     return names, parents
 
 
+def _collection_names_with_ancestors(
+    collection_keys: list[str],
+    names: dict[str, str],
+    parents: dict[str, str | None],
+) -> list[str]:
+    """A paper's direct collections plus every ancestor up each chain, so
+    a paper filed only in a subcollection still references the overarching
+    collections above it (issue #20)."""
+    result: list[str] = []
+    seen: set[str] = set()
+    for key in collection_keys:
+        while key is not None and key in names and key not in seen:
+            seen.add(key)
+            result.append(names[key])
+            key = parents.get(key)
+    return result
+
+
 def build_papers(
     config: Config, db_copy_path, counts: SyncCounts | None = None
 ) -> tuple[list[Paper], dict[str, dict]]:
@@ -79,7 +97,9 @@ def build_papers(
             if config.include_auto_tags or t.get("type", 0) != AUTOMATIC_TAG_TYPE
         ]
         collection_keys = data.get("collections", [])
-        collections = [collection_names[k] for k in collection_keys if k in collection_names]
+        collections = _collection_names_with_ancestors(
+            collection_keys, collection_names, collection_parents
+        )
 
         papers.append(
             Paper(
@@ -169,6 +189,9 @@ def run(config: Config) -> SyncCounts:
         db_copy.unlink(missing_ok=True)
 
     fields = config.frontmatter_fields
+    collection_names = collection_info.get("names", {})
+    collection_parents = collection_info.get("parents", {})
+    names_to_key = {v: k for k, v in collection_names.items()}
     seen_citekeys: set[str] = set()
     seen_collections: set[str] = set()
     # Citekeys that failed to sync this run (OSError or case-insensitive
@@ -200,13 +223,16 @@ def run(config: Config) -> SyncCounts:
             failed_citekeys.add(paper.citekey)
             continue
         seen_citekeys.add(paper.citekey)
-        seen_collections.update(paper.collections)
+        for name in paper.collections:
+            key = names_to_key.get(name)
+            while key is not None and key not in seen_collections:
+                seen_collections.add(key)
+                key = collection_parents.get(key)
 
-    names_to_key = {v: k for k, v in collection_info.get("names", {}).items()}
-    for name in seen_collections:
-        key = names_to_key.get(name)
-        parent_key = collection_info.get("parents", {}).get(key) if key else None
-        parent_name = collection_info["names"].get(parent_key) if parent_key else None
+    for key in seen_collections:
+        name = collection_names[key]
+        parent_key = collection_parents.get(key)
+        parent_name = collection_names.get(parent_key) if parent_key else None
         write_index_note(config.vault_path, "collection", name, parent_name, config.dry_run, counts)
 
     if not config.collection:

@@ -97,7 +97,10 @@ def test_sync_run_writes_paper_and_collection_notes(zotero_stub, zotero_sqlite_c
 
     jones = (papers_dir / "jones2019language.md").read_text(encoding="utf-8")
     assert 'citekey: "jones2019language"' in jones
-    assert "Collections: [[Machine Learning]]" in jones
+    # Machine Learning's parent is Research (see the Machine Learning.md
+    # assertion below) — jones2019language is filed directly under Machine
+    # Learning only, so its Collections line must also carry the ancestor.
+    assert "Collections: [[Machine Learning]], [[Research]]" in jones
     assert "Evaluation methodology varies widely" in jones
 
     lee = (papers_dir / "lee2021optimization.md").read_text(encoding="utf-8")
