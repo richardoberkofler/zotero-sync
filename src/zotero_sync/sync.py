@@ -233,7 +233,20 @@ def run(config: Config) -> SyncCounts:
         name = collection_names[key]
         parent_key = collection_parents.get(key)
         parent_name = collection_names.get(parent_key) if parent_key else None
-        write_index_note(config.vault_path, "collection", name, parent_name, config.dry_run, counts)
+        ancestors = (
+            _collection_names_with_ancestors([parent_key], collection_names, collection_parents)
+            if parent_key
+            else []
+        )
+        write_index_note(
+            config.vault_path,
+            "collection",
+            name,
+            parent_name,
+            config.dry_run,
+            counts,
+            ancestors=ancestors,
+        )
 
     if not config.collection:
         retire_candidates = (

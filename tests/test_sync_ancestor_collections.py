@@ -81,11 +81,22 @@ def test_run_writes_index_notes_for_every_ancestor_collection(monkeypatch, vault
                 return line
         raise AssertionError(f"no parent field in {name}.md")
 
-    # Each note links only to its immediate parent, not the whole chain.
+    # Each note's `parent` field links only to its immediate parent, not the
+    # whole chain — but `ancestors` carries the full chain above it, mirroring
+    # how a paper's `collections` field lists every collection above it.
     assert 'parent: "B"' in _parent_field("C")
     assert 'parent: "A"' in _parent_field("B")
     assert 'parent: "Root"' in _parent_field("A")
     assert _parent_field("Root") == "parent:" or 'parent: "' not in _parent_field("Root")
+
+    def _text(name: str) -> str:
+        return (vault / "Collections" / f"{name}.md").read_text(encoding="utf-8")
+
+    assert "Ancestors: [[B]], [[A]], [[Root]]" in _text("C")
+    assert "Ancestors: [[A]], [[Root]]" in _text("B")
+    assert "Ancestors: [[Root]]" in _text("A")
+    assert "ancestors: []" in _text("Root")
+    assert "Ancestors:" not in _text("Root")
 
     assert counts.created.get("Collections") == 4
 

@@ -112,11 +112,13 @@ def test_sync_run_writes_paper_and_collection_notes(zotero_stub, zotero_sqlite_c
     research = (vault / "Collections" / "Research.md").read_text(encoding="utf-8")
     assert 'title: "Research"' in research
     assert "parent:" in research and 'parent: "' not in research  # top-level: no parent
+    assert "ancestors: []" in research
 
     assert (vault / "Collections" / "Machine Learning.md").exists()
     ml = (vault / "Collections" / "Machine Learning.md").read_text(encoding="utf-8")
     assert 'title: "Machine Learning"' in ml
     assert 'parent: "Research"' in ml
+    assert "Ancestors: [[Research]]" in ml
 
     assert not (vault / "Authors").exists()
     assert not (vault / "Keywords").exists()

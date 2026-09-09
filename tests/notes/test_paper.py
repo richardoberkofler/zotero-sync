@@ -7,10 +7,10 @@ from zotero_sync.notes.paper import (
     ABSTRACT_END,
     ABSTRACT_START,
     _slugify_tag,
-    _yaml_scalar,
     render_abstract,
     render_frontmatter,
 )
+from zotero_sync.notes.yaml_util import yaml_scalar as _yaml_scalar
 
 
 def _make_paper(**overrides) -> Paper:

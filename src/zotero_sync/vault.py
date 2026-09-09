@@ -68,14 +68,22 @@ def write_paper_note(
 
 
 def write_index_note(
-    vault_path: Path, kind: str, title: str, parent: str | None, dry_run: bool, counts: SyncCounts
+    vault_path: Path,
+    kind: str,
+    title: str,
+    parent: str | None,
+    dry_run: bool,
+    counts: SyncCounts,
+    ancestors: list[str] | None = None,
 ) -> None:
     path = index_note_path(vault_path, kind, title)
     action = "updated" if path.exists() else "created"
     if not dry_run:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
-            index_notes.render_index_note(kind=kind, title=title, parent=parent),
+            index_notes.render_index_note(
+                kind=kind, title=title, parent=parent, ancestors=ancestors
+            ),
             encoding="utf-8",
         )
     counts.bump(kind.capitalize() + "s", action)

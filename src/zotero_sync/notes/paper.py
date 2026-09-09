@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 
 from zotero_sync.model import Annotation, Paper
+from zotero_sync.notes.yaml_util import yaml_list, yaml_scalar
 
 LINKS_START = "<!-- zotero-sync:links:start -->"
 LINKS_END = "<!-- zotero-sync:links:end -->"
@@ -19,18 +20,6 @@ _ANNOTATIONS_RE = re.compile(
 )
 
 
-def _yaml_scalar(value: str) -> str:
-    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
-    escaped = escaped.replace("\r\n", "\\n").replace("\n", "\\n").replace("\r", "\\n")
-    return f'"{escaped}"'
-
-
-def _yaml_list(values: list[str]) -> str:
-    if not values:
-        return "[]"
-    return "\n" + "\n".join(f"  - {_yaml_scalar(v)}" for v in values)
-
-
 def _slugify_tag(tag: str) -> str:
     """Obsidian's native tags: frontmatter property rejects spaces (and most
     punctuation) in tag names. Slugify for that field only — wikilinks and
@@ -42,18 +31,18 @@ def _slugify_tag(tag: str) -> str:
 
 def render_frontmatter(paper: Paper, fields: list[str]) -> str:
     values: dict[str, str] = {
-        "title": _yaml_scalar(paper.title),
-        "authors": _yaml_list(paper.authors),
-        "year": _yaml_scalar(paper.year or ""),
-        "type": _yaml_scalar(paper.item_type),
-        "doi": _yaml_scalar(paper.doi or ""),
-        "url": _yaml_scalar(paper.url or ""),
-        "citekey": _yaml_scalar(paper.citekey),
-        "collections": _yaml_list(paper.collections),
-        "tags": _yaml_list([_slugify_tag(t) for t in paper.tags]),
-        "date-added": _yaml_scalar(paper.date_added or ""),
-        "date-modified": _yaml_scalar(paper.date_modified or ""),
-        **{k: _yaml_scalar(v) for k, v in paper.extra_fields.items()},
+        "title": yaml_scalar(paper.title),
+        "authors": yaml_list(paper.authors),
+        "year": yaml_scalar(paper.year or ""),
+        "type": yaml_scalar(paper.item_type),
+        "doi": yaml_scalar(paper.doi or ""),
+        "url": yaml_scalar(paper.url or ""),
+        "citekey": yaml_scalar(paper.citekey),
+        "collections": yaml_list(paper.collections),
+        "tags": yaml_list([_slugify_tag(t) for t in paper.tags]),
+        "date-added": yaml_scalar(paper.date_added or ""),
+        "date-modified": yaml_scalar(paper.date_modified or ""),
+        **{k: yaml_scalar(v) for k, v in paper.extra_fields.items()},
     }
     lines = ["---"]
     for field_name in fields:
