@@ -7,8 +7,10 @@ from zotero_sync.notes.paper import (
     ABSTRACT_END,
     ABSTRACT_START,
     _slugify_tag,
+    detect_changes,
     render_abstract,
     render_frontmatter,
+    update_existing_note,
 )
 from zotero_sync.notes.yaml_util import yaml_scalar as _yaml_scalar
 
@@ -17,6 +19,7 @@ def _make_paper(**overrides) -> Paper:
     defaults = dict(
         citekey="doe2020",
         item_id=1,
+        zotero_key="AAAA1111",
         title="A Title",
         authors=["Jane Doe"],
         year="2020",
@@ -141,3 +144,102 @@ def test_render_frontmatter_parses_with_pyyaml_if_available():
     text = frontmatter.strip("-\n")
     parsed = yaml.safe_load(text)
     assert parsed["title"] == 'Multi\nline "title" with a \\ backslash.'
+
+
+# --- detect_changes (#24) ----------------------------------------------
+
+
+def _note_text(paper: Paper) -> str:
+    return update_existing_note("", paper, ["collections", "tags"])
+
+
+def test_detect_changes_with_no_snapshot_reports_nothing():
+    paper = _make_paper(collections=["Research"], tags=["Neural Networks"])
+
+    result = detect_changes(_note_text(paper), paper, None)
+
+    assert result == {
+        "vault_collections": False,
+        "vault_tags": False,
+        "zotero_collections": False,
+        "zotero_tags": False,
+    }
+
+
+def test_detect_changes_with_matching_snapshot_reports_nothing():
+    paper = _make_paper(collections=["Research"], tags=["Neural Networks"])
+    snapshot = {"collections": ["Research"], "tags": ["neural-networks"]}
+
+    result = detect_changes(_note_text(paper), paper, snapshot)
+
+    assert result == {
+        "vault_collections": False,
+        "vault_tags": False,
+        "zotero_collections": False,
+        "zotero_tags": False,
+    }
+
+
+def test_detect_changes_flags_vault_side_collection_edit():
+    paper = _make_paper(collections=["Research"], tags=["Neural Networks"])
+    snapshot = {"collections": ["Research"], "tags": ["neural-networks"]}
+    # Simulate a hand-edit: the vault note's frontmatter now says something
+    # the last-synced snapshot doesn't know about.
+    edited_text = _note_text(paper).replace('"Research"', '"Research", "Hand-added"')
+
+    result = detect_changes(edited_text, paper, snapshot)
+
+    assert result["vault_collections"] is True
+    assert result["vault_tags"] is False
+
+
+def test_detect_changes_flags_vault_side_tag_edit():
+    paper = _make_paper(collections=["Research"], tags=["Neural Networks"])
+    snapshot = {"collections": ["Research"], "tags": ["neural-networks"]}
+    edited_text = _note_text(paper).replace('"neural-networks"', '"hand-added-tag"')
+
+    result = detect_changes(edited_text, paper, snapshot)
+
+    assert result["vault_tags"] is True
+    assert result["vault_collections"] is False
+
+
+def test_detect_changes_flags_zotero_side_change():
+    # paper.collections/tags reflect what Zotero has *now*; a snapshot
+    # from an older sync that doesn't match means Zotero changed since.
+    paper = _make_paper(collections=["Research", "New In Zotero"], tags=["Neural Networks"])
+    snapshot = {"collections": ["Research"], "tags": ["neural-networks"]}
+
+    result = detect_changes(_note_text(paper), paper, snapshot)
+
+    assert result["zotero_collections"] is True
+    assert result["zotero_tags"] is False
+
+
+def test_detect_changes_ignores_list_order():
+    paper = _make_paper(collections=["Research", "Machine Learning"], tags=["A Tag", "B Tag"])
+    snapshot = {"collections": ["Machine Learning", "Research"], "tags": ["b-tag", "a-tag"]}
+
+    result = detect_changes(_note_text(paper), paper, snapshot)
+
+    assert not any(result.values())
+
+
+def test_detect_changes_with_no_frontmatter_block_reports_no_vault_change():
+    paper = _make_paper(collections=["Research"], tags=["Neural Networks"])
+    snapshot = {"collections": ["Research"], "tags": ["neural-networks"]}
+
+    result = detect_changes("# Just a heading, no frontmatter", paper, snapshot)
+
+    assert result["vault_collections"] is False
+    assert result["vault_tags"] is False
+
+
+def test_detect_changes_with_none_existing_text_skips_vault_side():
+    paper = _make_paper(collections=["Research"], tags=["Neural Networks"])
+    snapshot = {"collections": ["Research"], "tags": ["neural-networks"]}
+
+    result = detect_changes(None, paper, snapshot)
+
+    assert result["vault_collections"] is False
+    assert result["vault_tags"] is False

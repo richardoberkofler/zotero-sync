@@ -6,6 +6,7 @@ from zotero_sync import annotations, bbt_client, local_api, sync_state, web_api
 from zotero_sync.config import Config
 from zotero_sync.errors import ZoteroSyncError
 from zotero_sync.model import Annotation, Paper
+from zotero_sync.notes.paper import _slugify_tag
 from zotero_sync.vault import (
     SyncCounts,
     existing_paper_citekeys,
@@ -121,6 +122,7 @@ def build_papers(
             Paper(
                 citekey=citekey,
                 item_id=item_id_by_key.get(data["key"], 0),
+                zotero_key=data["key"],
                 title=data.get("title", ""),
                 authors=authors,
                 year=(data.get("date") or "")[:4] or None,
@@ -135,10 +137,22 @@ def build_papers(
             )
         )
 
+    # New snapshot for sync_state.py (#24's design), covering only papers
+    # that actually got a note written this run — an item dropped for
+    # missing a citekey has no note to compare against next time.
+    new_state = {
+        p.zotero_key: {
+            "version": item_versions.get(p.zotero_key),
+            "collections": p.collections,
+            "tags": [_slugify_tag(t) for t in p.tags],
+        }
+        for p in papers
+    }
+
     return papers, {
         "names": collection_names,
         "parents": collection_parents,
-        "item_versions": item_versions,
+        "new_state": new_state,
     }
 
 
@@ -210,14 +224,16 @@ def run(config: Config) -> SyncCounts:
         )
     db_copy = annotations.copy_database(source_db)
 
+    # Loaded before build_papers/the note-writing loop below overwrite
+    # anything, since detect_changes() needs the *prior* snapshot to
+    # compare against — see notes/paper.py's detect_changes() and #24.
+    prior_state = sync_state.load_state(config.vault_path) if config.mode == "web" else {}
+
     try:
         papers, collection_info = build_papers(config, db_copy, counts)
         attach_annotations(papers, db_copy)
     finally:
         db_copy.unlink(missing_ok=True)
-
-    if config.mode == "web" and not config.dry_run:
-        sync_state.save_state(config.vault_path, collection_info.get("item_versions", {}))
 
     fields = config.frontmatter_fields
     collection_names = collection_info.get("names", {})
@@ -248,7 +264,14 @@ def run(config: Config) -> SyncCounts:
             continue
         seen_citekeys_lower[lower] = paper.citekey
         try:
-            write_paper_note(config.vault_path, paper, fields, config.dry_run, counts)
+            write_paper_note(
+                config.vault_path,
+                paper,
+                fields,
+                config.dry_run,
+                counts,
+                prior_snapshot=prior_state.get(paper.zotero_key) if config.mode == "web" else None,
+            )
         except OSError as exc:
             counts.errors.append(f"{paper.citekey}: {exc}")
             failed_citekeys.add(paper.citekey)
@@ -285,5 +308,12 @@ def run(config: Config) -> SyncCounts:
         )
         for citekey in retire_candidates:
             retire_note(config.vault_path, citekey, config.dry_run, counts)
+
+    if config.mode == "web" and not config.dry_run:
+        # Merged rather than replaced outright: a --collection-scoped run
+        # only touches a subset of papers, and a wholesale replace would
+        # wipe the snapshot for everything outside that scope.
+        merged_state = {**prior_state, **collection_info.get("new_state", {})}
+        sync_state.save_state(config.vault_path, merged_state)
 
     return counts

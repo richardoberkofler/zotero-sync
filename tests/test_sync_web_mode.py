@@ -72,7 +72,9 @@ def test_sync_run_in_web_mode_writes_sync_state(zotero_stub, zotero_sqlite_copy,
 
     state = json.loads(state_path(vault).read_text(encoding="utf-8"))
 
-    assert state["AAAA1111"] == 101
+    assert state["AAAA1111"]["version"] == 101
+    assert state["AAAA1111"]["collections"] == ["Research"]
+    assert "neural-networks" in state["AAAA1111"]["tags"]
 
 
 def test_sync_run_in_web_mode_dry_run_does_not_write_sync_state(
@@ -87,3 +89,36 @@ def test_sync_run_in_local_mode_does_not_write_sync_state(zotero_stub, zotero_sq
     sync.run(Config(vault_path=vault))
 
     assert not state_path(vault).exists()
+
+
+def test_first_web_mode_sync_reports_no_changes(zotero_stub, zotero_sqlite_copy, vault):
+    # Bootstrap case from #24: no prior snapshot means "trust Zotero, no
+    # vault edit" — never a false-positive "conflict" on the first run.
+    counts = sync.run(_web_config(vault, zotero_stub))
+
+    assert counts.vault_side_changes == []
+    assert counts.zotero_side_changes == []
+
+
+def test_second_sync_flags_hand_edited_vault_frontmatter(zotero_stub, zotero_sqlite_copy, vault):
+    sync.run(_web_config(vault, zotero_stub))
+
+    note_path = vault / "Papers" / "smith2020neural.md"
+    edited = note_path.read_text(encoding="utf-8").replace(
+        '  - "Research"', '  - "Research"\n  - "Hand Added Collection"'
+    )
+    note_path.write_text(edited, encoding="utf-8")
+
+    counts = sync.run(_web_config(vault, zotero_stub))
+
+    assert "smith2020neural" in counts.vault_side_changes
+    assert "smith2020neural" not in counts.zotero_side_changes
+
+
+def test_second_sync_with_no_edits_reports_no_changes(zotero_stub, zotero_sqlite_copy, vault):
+    sync.run(_web_config(vault, zotero_stub))
+
+    counts = sync.run(_web_config(vault, zotero_stub))
+
+    assert counts.vault_side_changes == []
+    assert counts.zotero_side_changes == []

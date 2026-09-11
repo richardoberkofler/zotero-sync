@@ -20,6 +20,7 @@ def _paper(citekey: str = "smith2024widget", **overrides) -> Paper:
     kwargs = dict(
         citekey=citekey,
         item_id=1,
+        zotero_key=citekey,
         title="A Widget Study",
         authors=["Smith, John"],
         year="2024",

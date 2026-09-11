@@ -27,6 +27,7 @@ def _paper(citekey: str, collections: list[str]) -> Paper:
     return Paper(
         citekey=citekey,
         item_id=0,
+        zotero_key=citekey,
         title=f"Title for {citekey}",
         authors=["Someone"],
         year="2020",

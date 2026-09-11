@@ -25,6 +25,7 @@ def _paper(citekey: str) -> Paper:
     return Paper(
         citekey=citekey,
         item_id=0,
+        zotero_key=citekey,
         title=f"Title for {citekey}",
         authors=["Someone"],
         year="2020",
@@ -70,7 +71,7 @@ def test_oserror_during_write_does_not_retire_existing_note(monkeypatch, vault, 
     papers = [_paper("alive2020"), _paper("errpaper2020")]
     monkeypatch.setattr(sync, "build_papers", lambda config, db_copy, counts=None: (papers, {}))
 
-    def fake_write_paper_note(vault_path, paper, fields, dry_run, counts):
+    def fake_write_paper_note(vault_path, paper, fields, dry_run, counts, prior_snapshot=None):
         if paper.citekey == "errpaper2020":
             raise OSError("simulated transient write failure")
         counts.bump("Papers", "created")

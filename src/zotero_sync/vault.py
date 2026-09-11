@@ -18,6 +18,12 @@ class SyncCounts:
         self.updated: dict[str, int] = {}
         self.retired: list[str] = []
         self.errors: list[str] = []
+        # Populated in web mode only (#24's detection design): citekeys
+        # whose collections/tags diverged from the last-synced snapshot on
+        # each side. Reporting only — what to do about a detected change
+        # is #25's job, not decided yet.
+        self.vault_side_changes: list[str] = []
+        self.zotero_side_changes: list[str] = []
 
     def bump(self, category: str, action: str) -> None:
         bucket = self.created if action == "created" else self.updated
@@ -52,12 +58,24 @@ def existing_paper_citekeys(vault_path: Path) -> set[str]:
 
 
 def write_paper_note(
-    vault_path: Path, paper: Paper, fields: list[str], dry_run: bool, counts: SyncCounts
+    vault_path: Path,
+    paper: Paper,
+    fields: list[str],
+    dry_run: bool,
+    counts: SyncCounts,
+    prior_snapshot: dict | None = None,
 ) -> None:
     path = paper_note_path(vault_path, paper.citekey)
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
-        new_text = paper_notes.update_existing_note(path.read_text(encoding="utf-8"), paper, fields)
+        existing_text = path.read_text(encoding="utf-8")
+        if prior_snapshot is not None:
+            changes = paper_notes.detect_changes(existing_text, paper, prior_snapshot)
+            if changes["vault_collections"] or changes["vault_tags"]:
+                counts.vault_side_changes.append(paper.citekey)
+            if changes["zotero_collections"] or changes["zotero_tags"]:
+                counts.zotero_side_changes.append(paper.citekey)
+        new_text = paper_notes.update_existing_note(existing_text, paper, fields)
         action = "updated"
     else:
         new_text = paper_notes.render_new_note(paper, fields)

@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 
 from zotero_sync.model import Annotation, Paper
-from zotero_sync.notes.yaml_util import yaml_list, yaml_scalar
+from zotero_sync.notes.yaml_util import parse_yaml_list, yaml_list, yaml_scalar
 
 LINKS_START = "<!-- zotero-sync:links:start -->"
 LINKS_END = "<!-- zotero-sync:links:end -->"
@@ -137,3 +137,47 @@ def update_existing_note(existing_text: str, paper: Paper, fields: list[str]) ->
         text = text.rstrip("\n") + "\n\n" + render_annotations(paper)
 
     return text
+
+
+def detect_changes(
+    existing_text: str | None, paper: Paper, snapshot: dict | None
+) -> dict[str, bool]:
+    """Compares both sides against the last-synced snapshot (#24's design):
+    the vault's *current* frontmatter (parsed from existing_text, before
+    update_existing_note() would overwrite it) against Zotero's *current*
+    data (paper.collections/paper.tags, already fetched this run). No
+    snapshot (bootstrap: first sync, or a vault switching into web mode
+    for the first time) means "trust Zotero, no vault edit" — nothing to
+    diff against yet. Comparison is set-based: list order in these fields
+    has never been meaningful. Tags compare in slugified form on both
+    sides (matching what render_frontmatter() actually writes) since
+    slugification is lossy/one-way — detection never needs to invert it."""
+    if snapshot is None:
+        return {
+            "vault_collections": False,
+            "vault_tags": False,
+            "zotero_collections": False,
+            "zotero_tags": False,
+        }
+
+    snap_collections = set(snapshot.get("collections", []))
+    snap_tags = set(snapshot.get("tags", []))
+
+    result = {
+        "vault_collections": False,
+        "vault_tags": False,
+        "zotero_collections": set(paper.collections) != snap_collections,
+        "zotero_tags": {_slugify_tag(t) for t in paper.tags} != snap_tags,
+    }
+
+    if existing_text is not None:
+        match = _FRONTMATTER_RE.search(existing_text)
+        block = match.group(0) if match else ""
+        vault_collections = parse_yaml_list(block, "collections")
+        vault_tags = parse_yaml_list(block, "tags")
+        if vault_collections is not None:
+            result["vault_collections"] = set(vault_collections) != snap_collections
+        if vault_tags is not None:
+            result["vault_tags"] = set(vault_tags) != snap_tags
+
+    return result

@@ -31,6 +31,7 @@ def _paper(citekey: str, item_id: int) -> Paper:
     return Paper(
         citekey=citekey,
         item_id=item_id,
+        zotero_key=citekey,
         title="",
         authors=[],
         year=None,

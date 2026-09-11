@@ -35,6 +35,7 @@ class Annotation:
 class Paper:
     citekey: str
     item_id: int
+    zotero_key: str
     title: str
     authors: list[str]
     year: str | None

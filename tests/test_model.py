@@ -13,6 +13,7 @@ def _minimal_paper(**overrides) -> Paper:
     kwargs = dict(
         citekey="smith2024widget",
         item_id=1,
+        zotero_key="AAAA1111",
         title="A Widget Study",
         authors=["Smith, John"],
         year="2024",
