@@ -4,7 +4,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from zotero_sync import sync
+from zotero_sync import onboarding, sync
 from zotero_sync.config import apply_overrides, config_path, load_or_init_config
 from zotero_sync.errors import ZoteroSyncError
 
@@ -43,6 +43,9 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     vault_path = (args.vault or Path.cwd()).resolve()
+
+    if onboarding.is_first_run(vault_path) and sys.stdin.isatty():
+        onboarding.run(vault_path)
 
     try:
         config, generated = load_or_init_config(vault_path)
