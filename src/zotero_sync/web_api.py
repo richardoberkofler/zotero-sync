@@ -122,6 +122,22 @@ def find_collection_key(name: str) -> str | None:
     return None
 
 
+def create_collection(name: str) -> str:
+    """Auto-creates a collection at the library's top level (no
+    parentCollection) via the real API's array-create endpoint (#25's
+    decision: a vault-side collection name with no existing match, and no
+    close-enough typo match either, gets created rather than dropped).
+    Returns the new collection's key."""
+    raw, _headers = _request(
+        "POST",
+        "/collections",
+        data=json.dumps([{"name": name}]).encode("utf-8"),
+        extra_headers={"Content-Type": "application/json"},
+    )
+    result = json.loads(raw)
+    return result["successful"]["0"]["data"]["key"]
+
+
 def update_item(
     key: str,
     *,

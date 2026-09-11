@@ -67,6 +67,17 @@ the Local API paths above:
                                        no header -> write applied.
 Items are deep-copied per ZoteroStubServer instance, so PATCH writes in
 one test never leak into another.
+
+  POST /users/<id>/collections -> real API's array-create shape (issue
+                                   #31): body is a list of {"name": ...}
+                                   objects (no parentCollection support —
+                                   zotero-sync only ever auto-creates at
+                                   the library's top level), response is
+                                   {"successful": {"0": {"key": ...,
+                                   "data": {...}}, ...}}. Collections are
+                                   deep-copied per instance too, so a
+                                   created collection in one test never
+                                   leaks into another.
 """
 
 from __future__ import annotations
@@ -170,7 +181,7 @@ class _Handler(BaseHTTPRequestHandler):
             return
 
         if _WEB_COLLECTIONS_RE.match(path):
-            self._send_json(_COLLECTIONS)
+            self._send_json(self.server.collections)
             return
 
         match = _WEB_ITEM_RE.match(path)
@@ -187,8 +198,33 @@ class _Handler(BaseHTTPRequestHandler):
     def _find_item(self, key: str) -> dict | None:
         return next((item for item in self.server.items if item["key"] == key), None)
 
+    def _create_collections(self) -> None:
+        """POST /collections array-create (issue #31): mirrors the real
+        API's response shape (web_api.create_collection() reads
+        successful["0"]["data"]["key"]) closely enough for zotero-sync's
+        own client code, not a full re-implementation of every field the
+        real endpoint returns."""
+        length = int(self.headers.get("Content-Length", 0))
+        raw = self.rfile.read(length) if length else b"[]"
+        requested = json.loads(raw or b"[]")
+
+        successful = {}
+        for i, entry in enumerate(requested):
+            key = f"NEWK{len(self.server.collections):04d}"
+            data = {"key": key, "name": entry["name"], "parentCollection": False, "version": 1}
+            self.server.collections.append({"key": key, "version": 1, "data": data})
+            successful[str(i)] = {"key": key, "data": data}
+
+        self._send_json({"successful": successful, "unchanged": {}, "failed": {}})
+
     def do_POST(self) -> None:  # noqa: N802
         if self._send_fault():
+            return
+
+        path = self.path.split("?", 1)[0]
+
+        if _WEB_COLLECTIONS_RE.match(path):
+            self._create_collections()
             return
 
         if self.path != "/better-bibtex/json-rpc":
@@ -284,9 +320,11 @@ class ZoteroStubServer:
     def __init__(self, host: str = "127.0.0.1", port: int = 0) -> None:
         self._httpd = HTTPServer((host, port), _Handler)
         self._httpd.fault = None
-        # Per-instance deep copy so PATCH writes (issue #27) in one test
-        # never leak into another via the shared module-level fixture.
+        # Per-instance deep copy so PATCH writes (issue #27) / created
+        # collections (issue #31) in one test never leak into another via
+        # the shared module-level fixture.
         self._httpd.items = copy.deepcopy(_ITEMS)
+        self._httpd.collections = copy.deepcopy(_COLLECTIONS)
         self._thread: threading.Thread | None = None
 
     @property

@@ -122,3 +122,109 @@ def test_second_sync_with_no_edits_reports_no_changes(zotero_stub, zotero_sqlite
 
     assert counts.vault_side_changes == []
     assert counts.zotero_side_changes == []
+
+
+# --- 3-way merge + write-back (#25/#31) ---------------------------------
+
+
+def _note_path(vault: Path) -> Path:
+    return vault / "Papers" / "smith2020neural.md"
+
+
+def _edit_collections_field(vault: Path, new_block: str) -> None:
+    note_path = _note_path(vault)
+    text = note_path.read_text(encoding="utf-8")
+    text = text.replace('collections: \n  - "Research"', new_block)
+    note_path.write_text(text, encoding="utf-8")
+
+
+def test_vault_side_removal_propagates_to_zotero(zotero_stub, zotero_sqlite_copy, vault):
+    sync.run(_web_config(vault, zotero_stub))
+    _edit_collections_field(vault, "collections: []")
+
+    sync.run(_web_config(vault, zotero_stub))
+
+    item = next(i for i in zotero_stub._httpd.items if i["key"] == "AAAA1111")
+    assert item["data"]["collections"] == []
+    state = json.loads(state_path(vault).read_text(encoding="utf-8"))
+    assert state["AAAA1111"]["collections"] == []
+
+
+def test_vault_side_addition_of_existing_collection_propagates_to_zotero(
+    zotero_stub, zotero_sqlite_copy, vault
+):
+    sync.run(_web_config(vault, zotero_stub))
+    _edit_collections_field(vault, 'collections:\n  - "Research"\n  - "Machine Learning"')
+
+    sync.run(_web_config(vault, zotero_stub))
+
+    item = next(i for i in zotero_stub._httpd.items if i["key"] == "AAAA1111")
+    assert set(item["data"]["collections"]) == {"RES00001", "SUB00002"}
+
+
+def test_vault_side_typo_of_existing_collection_warns_and_skips(
+    zotero_stub, zotero_sqlite_copy, vault
+):
+    sync.run(_web_config(vault, zotero_stub))
+    _edit_collections_field(vault, 'collections:\n  - "Reserch"')
+
+    counts = sync.run(_web_config(vault, zotero_stub))
+
+    assert any('did you mean "Research"' in err for err in counts.errors)
+    item = next(i for i in zotero_stub._httpd.items if i["key"] == "AAAA1111")
+    assert item["data"]["collections"] == ["RES00001"]
+    note_text = _note_path(vault).read_text(encoding="utf-8")
+    assert '"Research"' in note_text
+
+
+def test_vault_side_new_collection_name_gets_auto_created(zotero_stub, zotero_sqlite_copy, vault):
+    sync.run(_web_config(vault, zotero_stub))
+    _edit_collections_field(vault, 'collections:\n  - "Research"\n  - "Astrophysics"')
+
+    sync.run(_web_config(vault, zotero_stub))
+
+    assert any(c["data"]["name"] == "Astrophysics" for c in zotero_stub._httpd.collections)
+    item = next(i for i in zotero_stub._httpd.items if i["key"] == "AAAA1111")
+    created_key = next(
+        c["data"]["key"]
+        for c in zotero_stub._httpd.collections
+        if c["data"]["name"] == "Astrophysics"
+    )
+    assert created_key in item["data"]["collections"]
+    note_text = _note_path(vault).read_text(encoding="utf-8")
+    assert '"Astrophysics"' in note_text
+
+
+def test_vault_side_new_tag_propagates_to_zotero(zotero_stub, zotero_sqlite_copy, vault):
+    sync.run(_web_config(vault, zotero_stub))
+    note_path = _note_path(vault)
+    text = note_path.read_text(encoding="utf-8")
+    text = text.replace('  - "neural-networks"', '  - "neural-networks"\n  - "brand-new-tag"')
+    note_path.write_text(text, encoding="utf-8")
+
+    sync.run(_web_config(vault, zotero_stub))
+
+    item = next(i for i in zotero_stub._httpd.items if i["key"] == "AAAA1111")
+    assert "brand-new-tag" in [t["tag"] for t in item["data"]["tags"]]
+
+
+def test_write_back_failure_is_reported_and_state_left_for_retry(
+    monkeypatch, zotero_stub, zotero_sqlite_copy, vault
+):
+    from zotero_sync import web_api
+    from zotero_sync.errors import ZoteroSyncError
+
+    sync.run(_web_config(vault, zotero_stub))
+    _edit_collections_field(vault, "collections: []")
+
+    def _boom(*args, **kwargs):
+        raise ZoteroSyncError("simulated conflict")
+
+    monkeypatch.setattr(web_api, "update_item", _boom)
+    before = json.loads(state_path(vault).read_text(encoding="utf-8"))
+
+    counts = sync.run(_web_config(vault, zotero_stub))
+
+    assert any("will retry next run" in err for err in counts.errors)
+    after = json.loads(state_path(vault).read_text(encoding="utf-8"))
+    assert after["AAAA1111"] == before["AAAA1111"]

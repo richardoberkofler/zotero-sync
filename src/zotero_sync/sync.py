@@ -5,11 +5,14 @@ from types import ModuleType
 from zotero_sync import annotations, bbt_client, local_api, sync_state, web_api
 from zotero_sync.config import Config
 from zotero_sync.errors import ZoteroSyncError
+from zotero_sync.merge import find_close_match, three_way_merge
 from zotero_sync.model import Annotation, Paper
+from zotero_sync.notes import paper as paper_notes
 from zotero_sync.notes.paper import _slugify_tag
 from zotero_sync.vault import (
     SyncCounts,
     existing_paper_citekeys,
+    paper_note_path,
     retire_note,
     write_index_note,
     write_paper_note,
@@ -113,7 +116,13 @@ def build_papers(
             for t in data.get("tags", [])
             if config.include_auto_tags or t.get("type", 0) != AUTOMATIC_TAG_TYPE
         ]
+        # Direct/leaf membership (#25/#31's representation fix) — kept
+        # separate from the ancestor-expanded display list below, since
+        # that's what the editable frontmatter field and the 3-way merge
+        # need: an ancestor name in the expanded list isn't something the
+        # paper is actually filed in.
         collection_keys = data.get("collections", [])
+        direct_collections = [collection_names[k] for k in collection_keys if k in collection_names]
         collections = _collection_names_with_ancestors(
             collection_keys, collection_names, collection_parents
         )
@@ -133,6 +142,7 @@ def build_papers(
                 date_added=data.get("dateAdded"),
                 date_modified=data.get("dateModified"),
                 collections=collections,
+                direct_collections=direct_collections,
                 tags=tags,
             )
         )
@@ -143,7 +153,7 @@ def build_papers(
     new_state = {
         p.zotero_key: {
             "version": item_versions.get(p.zotero_key),
-            "collections": p.collections,
+            "collections": p.direct_collections,
             "tags": [_slugify_tag(t) for t in p.tags],
         }
         for p in papers
@@ -198,6 +208,147 @@ def attach_annotations(papers: list[Paper], db_copy_path) -> None:
         ]
 
 
+def _resolve_merged_collections(
+    merged_names: set[str],
+    names_to_key: dict[str, str],
+    collection_names: dict[str, str],
+    api: ModuleType,
+    dry_run: bool,
+    citekey: str,
+    counts: SyncCounts,
+) -> tuple[list[str], list[str] | None]:
+    """Maps a merged set of collection names to Zotero collection keys —
+    #25's typo-check/auto-create flow. A name close to an existing one is
+    treated as a likely typo: warn and skip this paper's whole collections
+    write this run (returns keys=None) rather than guess. A name with no
+    close match is genuinely new: auto-created at the library's top level.
+    Returns (final_names, final_keys); keys is None when the write should
+    be skipped."""
+    final_names: list[str] = []
+    final_keys: list[str] = []
+    for name in sorted(merged_names):
+        key = names_to_key.get(name)
+        if key is None:
+            match = find_close_match(name, list(names_to_key.keys()))
+            if match is not None:
+                counts.errors.append(
+                    f'{citekey}: collection "{name}" not found in Zotero — did you '
+                    f'mean "{match}"? Skipping the collections sync for this paper '
+                    "this run."
+                )
+                return [], None
+            if dry_run:
+                # Can't allocate a real key without writing. The write is
+                # skipped for dry runs regardless, so just keep the name for
+                # a truthful frontmatter preview.
+                final_names.append(name)
+                continue
+            key = api.create_collection(name)
+            names_to_key[name] = key
+            collection_names[key] = name
+        final_names.append(name)
+        final_keys.append(key)
+    return final_names, final_keys
+
+
+def _resolve_merged_tags(
+    merged_slugs: set[str],
+    zotero_slugs: set[str],
+    library_slugs: set[str],
+    raw_by_slug: dict[str, str],
+    citekey: str,
+    counts: SyncCounts,
+) -> tuple[list[str], list[str]]:
+    """Per-tag typo-check (#25) — unlike collections, a near-miss here only
+    drops *that* tag, not the whole field: tags have no identity to
+    auto-create against, Zotero just stores whatever string is sent, so a
+    genuinely new tag needs no special handling beyond using it as-is.
+    Returns (final_slugs, final_raw_tag_strings)."""
+    final_slugs: list[str] = []
+    for slug in sorted(merged_slugs):
+        if slug in zotero_slugs or slug in library_slugs:
+            final_slugs.append(slug)
+            continue
+        match = find_close_match(slug, list(library_slugs))
+        if match is not None:
+            counts.errors.append(
+                f'{citekey}: tag "{slug}" not found in the library — did you mean '
+                f'"{match}"? Skipping this tag this run.'
+            )
+            continue
+        final_slugs.append(slug)
+    final_raw = [raw_by_slug.get(s, s) for s in final_slugs]
+    return final_slugs, final_raw
+
+
+def _reconcile_paper(
+    paper: Paper,
+    existing_text: str | None,
+    snapshot: dict | None,
+    names_to_key: dict[str, str],
+    collection_names: dict[str, str],
+    collection_parents: dict[str, str | None],
+    library_tag_slugs: set[str],
+    api: ModuleType,
+    dry_run: bool,
+    counts: SyncCounts,
+) -> dict | None:
+    """Runs #25's 3-way merge for one paper's collections/tags against the
+    prior snapshot, mutating `paper` to hold the merged result — what
+    render_frontmatter()/render_links() will write. Returns what changed
+    relative to Zotero's current data, for the write-back step in run()
+    below, or None when there's no snapshot to merge against (bootstrap:
+    paper already reflects Zotero as fetched, nothing to reconcile)."""
+    if snapshot is None:
+        return None
+
+    vault_collections, vault_tags = paper_notes.parse_vault_lists(existing_text)
+    zot_collections = set(paper.direct_collections)
+    zot_tags_slugs = {_slugify_tag(t) for t in paper.tags}
+    tag_raw_by_slug = {_slugify_tag(t): t for t in paper.tags}
+
+    snap_collections = set(snapshot.get("collections", []))
+    snap_tags = set(snapshot.get("tags", []))
+
+    merged_collections = three_way_merge(
+        snap_collections,
+        set(vault_collections) if vault_collections is not None else zot_collections,
+        zot_collections,
+    )
+    merged_tags_slugs = three_way_merge(
+        snap_tags,
+        set(vault_tags) if vault_tags is not None else zot_tags_slugs,
+        zot_tags_slugs,
+    )
+
+    final_names, final_keys = _resolve_merged_collections(
+        merged_collections, names_to_key, collection_names, api, dry_run, paper.citekey, counts
+    )
+    if final_keys is None:
+        # A typo warning fired for this paper — leave collections untouched
+        # this run rather than guess.
+        final_names = list(paper.direct_collections)
+        final_keys = [names_to_key[n] for n in final_names if n in names_to_key]
+
+    final_tag_slugs, final_tags_raw = _resolve_merged_tags(
+        merged_tags_slugs, zot_tags_slugs, library_tag_slugs, tag_raw_by_slug, paper.citekey, counts
+    )
+
+    paper.direct_collections = final_names
+    paper.collections = _collection_names_with_ancestors(
+        final_keys, collection_names, collection_parents
+    )
+    paper.tags = final_tags_raw
+
+    return {
+        "final_direct_names": final_names,
+        "final_direct_keys": final_keys,
+        "final_tag_slugs": final_tag_slugs,
+        "collections_changed": set(final_names) != zot_collections,
+        "tags_changed": set(final_tag_slugs) != zot_tags_slugs,
+    }
+
+
 def run(config: Config) -> SyncCounts:
     bbt_client.check_ready()
 
@@ -224,9 +375,9 @@ def run(config: Config) -> SyncCounts:
         )
     db_copy = annotations.copy_database(source_db)
 
-    # Loaded before build_papers/the note-writing loop below overwrite
-    # anything, since detect_changes() needs the *prior* snapshot to
-    # compare against — see notes/paper.py's detect_changes() and #24.
+    # Loaded before build_papers/the loop below overwrite anything, since
+    # both detect_changes() and the 3-way merge need the *prior* snapshot to
+    # compare against — see notes/paper.py's detect_changes() and #24/#25.
     prior_state = sync_state.load_state(config.vault_path) if config.mode == "web" else {}
 
     try:
@@ -239,6 +390,12 @@ def run(config: Config) -> SyncCounts:
     collection_names = collection_info.get("names", {})
     collection_parents = collection_info.get("parents", {})
     names_to_key = {v: k for k, v in collection_names.items()}
+    # The library-wide tag vocabulary for #25's per-tag typo-check, captured
+    # from Zotero's current data before any paper's tags get mutated by the
+    # merge below — a paper's own tags are checked against every *other*
+    # tag currently in the library, not just what it already has itself.
+    library_tag_slugs = {_slugify_tag(t) for p in papers for t in p.tags}
+    web_state_updates: dict[str, dict] = {}
     seen_citekeys: set[str] = set()
     seen_collections: set[str] = set()
     # Citekeys that failed to sync this run (OSError or case-insensitive
@@ -263,20 +420,89 @@ def run(config: Config) -> SyncCounts:
             failed_citekeys.add(paper.citekey)
             continue
         seen_citekeys_lower[lower] = paper.citekey
-        try:
-            write_paper_note(
-                config.vault_path,
+
+        snapshot = prior_state.get(paper.zotero_key) if config.mode == "web" else None
+        path = paper_note_path(config.vault_path, paper.citekey)
+        existing_text = path.read_text(encoding="utf-8") if path.exists() else None
+
+        if config.mode == "web":
+            changes = paper_notes.detect_changes(existing_text, paper, snapshot)
+            if changes["vault_collections"] or changes["vault_tags"]:
+                counts.vault_side_changes.append(paper.citekey)
+            if changes["zotero_collections"] or changes["zotero_tags"]:
+                counts.zotero_side_changes.append(paper.citekey)
+
+        reconciliation = None
+        if config.mode == "web":
+            reconciliation = _reconcile_paper(
                 paper,
-                fields,
+                existing_text,
+                snapshot,
+                names_to_key,
+                collection_names,
+                collection_parents,
+                library_tag_slugs,
+                web_api,
                 config.dry_run,
                 counts,
-                prior_snapshot=prior_state.get(paper.zotero_key) if config.mode == "web" else None,
             )
+
+        try:
+            write_paper_note(config.vault_path, paper, fields, config.dry_run, counts)
         except OSError as exc:
             counts.errors.append(f"{paper.citekey}: {exc}")
             failed_citekeys.add(paper.citekey)
             continue
         seen_citekeys.add(paper.citekey)
+
+        if config.mode == "web":
+            if reconciliation is None:
+                # Bootstrap: nothing to reconcile, trust Zotero's raw fetch
+                # as-is (#24's decision).
+                state_entry = collection_info["new_state"].get(paper.zotero_key)
+                if state_entry is not None:
+                    web_state_updates[paper.zotero_key] = state_entry
+            else:
+                current_version = (
+                    collection_info["new_state"].get(paper.zotero_key, {}).get("version")
+                )
+                if reconciliation["collections_changed"] or reconciliation["tags_changed"]:
+                    if not config.dry_run:
+                        try:
+                            new_version = web_api.update_item(
+                                paper.zotero_key,
+                                collections=(
+                                    reconciliation["final_direct_keys"]
+                                    if reconciliation["collections_changed"]
+                                    else None
+                                ),
+                                tags=(
+                                    [{"tag": t} for t in paper.tags]
+                                    if reconciliation["tags_changed"]
+                                    else None
+                                ),
+                                since_version=current_version,
+                            )
+                        except ZoteroSyncError as exc:
+                            counts.errors.append(
+                                f"{paper.citekey}: failed to write collections/tags "
+                                f"back to Zotero ({exc}) — will retry next run."
+                            )
+                        else:
+                            web_state_updates[paper.zotero_key] = {
+                                "version": new_version,
+                                "collections": reconciliation["final_direct_names"],
+                                "tags": reconciliation["final_tag_slugs"],
+                            }
+                    # dry_run: nothing was actually written, so the prior
+                    # snapshot stands — don't record a state update.
+                else:
+                    web_state_updates[paper.zotero_key] = {
+                        "version": current_version,
+                        "collections": reconciliation["final_direct_names"],
+                        "tags": reconciliation["final_tag_slugs"],
+                    }
+
         for name in paper.collections:
             key = names_to_key.get(name)
             while key is not None and key not in seen_collections:
@@ -311,9 +537,10 @@ def run(config: Config) -> SyncCounts:
 
     if config.mode == "web" and not config.dry_run:
         # Merged rather than replaced outright: a --collection-scoped run
-        # only touches a subset of papers, and a wholesale replace would
-        # wipe the snapshot for everything outside that scope.
-        merged_state = {**prior_state, **collection_info.get("new_state", {})}
+        # only touches a subset of papers, and a write that 412'd is
+        # deliberately left out of web_state_updates so its prior snapshot
+        # entry survives for a retry next run.
+        merged_state = {**prior_state, **web_state_updates}
         sync_state.save_state(config.vault_path, merged_state)
 
     return counts

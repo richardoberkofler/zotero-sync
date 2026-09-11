@@ -38,7 +38,7 @@ def render_frontmatter(paper: Paper, fields: list[str]) -> str:
         "doi": yaml_scalar(paper.doi or ""),
         "url": yaml_scalar(paper.url or ""),
         "citekey": yaml_scalar(paper.citekey),
-        "collections": yaml_list(paper.collections),
+        "collections": yaml_list(paper.direct_collections),
         "tags": yaml_list([_slugify_tag(t) for t in paper.tags]),
         "date-added": yaml_scalar(paper.date_added or ""),
         "date-modified": yaml_scalar(paper.date_modified or ""),
@@ -139,13 +139,26 @@ def update_existing_note(existing_text: str, paper: Paper, fields: list[str]) ->
     return text
 
 
+def parse_vault_lists(existing_text: str | None) -> tuple[list[str] | None, list[str] | None]:
+    """Reads the vault's *current* direct-collections/tags lists straight out
+    of its frontmatter — before this run's write would overwrite them — for
+    both detect_changes() below and sync.py's 3-way merge (#25/#31). None
+    for a field means it wasn't present in the frontmatter at all (as
+    opposed to present-but-empty)."""
+    if existing_text is None:
+        return None, None
+    match = _FRONTMATTER_RE.search(existing_text)
+    block = match.group(0) if match else ""
+    return parse_yaml_list(block, "collections"), parse_yaml_list(block, "tags")
+
+
 def detect_changes(
     existing_text: str | None, paper: Paper, snapshot: dict | None
 ) -> dict[str, bool]:
     """Compares both sides against the last-synced snapshot (#24's design):
     the vault's *current* frontmatter (parsed from existing_text, before
     update_existing_note() would overwrite it) against Zotero's *current*
-    data (paper.collections/paper.tags, already fetched this run). No
+    data (paper.direct_collections/paper.tags, already fetched this run). No
     snapshot (bootstrap: first sync, or a vault switching into web mode
     for the first time) means "trust Zotero, no vault edit" — nothing to
     diff against yet. Comparison is set-based: list order in these fields
@@ -166,18 +179,14 @@ def detect_changes(
     result = {
         "vault_collections": False,
         "vault_tags": False,
-        "zotero_collections": set(paper.collections) != snap_collections,
+        "zotero_collections": set(paper.direct_collections) != snap_collections,
         "zotero_tags": {_slugify_tag(t) for t in paper.tags} != snap_tags,
     }
 
-    if existing_text is not None:
-        match = _FRONTMATTER_RE.search(existing_text)
-        block = match.group(0) if match else ""
-        vault_collections = parse_yaml_list(block, "collections")
-        vault_tags = parse_yaml_list(block, "tags")
-        if vault_collections is not None:
-            result["vault_collections"] = set(vault_collections) != snap_collections
-        if vault_tags is not None:
-            result["vault_tags"] = set(vault_tags) != snap_tags
+    vault_collections, vault_tags = parse_vault_lists(existing_text)
+    if vault_collections is not None:
+        result["vault_collections"] = set(vault_collections) != snap_collections
+    if vault_tags is not None:
+        result["vault_tags"] = set(vault_tags) != snap_tags
 
     return result

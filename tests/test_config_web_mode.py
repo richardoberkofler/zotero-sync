@@ -61,7 +61,7 @@ def test_web_mode_with_complete_env_loads_credentials(tmp_path: Path) -> None:
     _write_toml(tmp_path)
     env_path(tmp_path).write_text(
         "ZOTERO_API_KEY=abc123\n"
-        "ZOTERO_LIBRARY_ID=6668868\n"
+        "ZOTERO_LIBRARY_ID=1234567\n"
         "ZOTERO_LIBRARY_TYPE=group\n"
         "# a comment, and a blank line follow\n"
         "\n",
@@ -72,7 +72,7 @@ def test_web_mode_with_complete_env_loads_credentials(tmp_path: Path) -> None:
 
     assert config.mode == "web"
     assert config.web_api_key == "abc123"
-    assert config.web_library_id == "6668868"
+    assert config.web_library_id == "1234567"
     assert config.web_library_type == "group"
 
 

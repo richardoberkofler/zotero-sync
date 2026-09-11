@@ -63,18 +63,11 @@ def write_paper_note(
     fields: list[str],
     dry_run: bool,
     counts: SyncCounts,
-    prior_snapshot: dict | None = None,
 ) -> None:
     path = paper_note_path(vault_path, paper.citekey)
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
         existing_text = path.read_text(encoding="utf-8")
-        if prior_snapshot is not None:
-            changes = paper_notes.detect_changes(existing_text, paper, prior_snapshot)
-            if changes["vault_collections"] or changes["vault_tags"]:
-                counts.vault_side_changes.append(paper.citekey)
-            if changes["zotero_collections"] or changes["zotero_tags"]:
-                counts.zotero_side_changes.append(paper.citekey)
         new_text = paper_notes.update_existing_note(existing_text, paper, fields)
         action = "updated"
     else:

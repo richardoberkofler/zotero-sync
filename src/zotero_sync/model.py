@@ -45,7 +45,16 @@ class Paper:
     abstract: str | None
     date_added: str | None
     date_modified: str | None
+    # Ancestor-expanded (issue #20): a paper's direct collections plus every
+    # collection above them in the tree. Used for the read-only Links region
+    # only — see direct_collections below for the editable/diffable one.
     collections: list[str] = field(default_factory=list)
+    # Direct/leaf collection membership only (#25/#31's representation fix):
+    # what render_frontmatter()'s editable `collections:` field shows, and
+    # what detect_changes()/the 3-way merge compare — the ancestor-expanded
+    # `collections` above is ambiguous for that (a name in it might be an
+    # ancestor, not something the paper is actually filed in).
+    direct_collections: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)
     extra_fields: dict[str, str] = field(default_factory=dict)
     annotations: list[Annotation] = field(default_factory=list)

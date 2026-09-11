@@ -62,10 +62,17 @@ def test_update_item_stale_version_raises(zotero_stub):
         web_api.update_item(ITEM_KEY, tags=[{"tag": "stale"}], since_version=1)
 
 
-def test_configure_sets_base_url_and_key():
-    web_api.configure("6668868", "group", "my-key", root="https://example.org")
+def test_create_collection_returns_new_key(zotero_stub):
+    key = web_api.create_collection("Astrophysics")
 
-    assert web_api.BASE_URL == "https://example.org/groups/6668868"
+    assert key
+    assert any(c["data"]["name"] == "Astrophysics" for c in web_api.list_collections())
+
+
+def test_configure_sets_base_url_and_key():
+    web_api.configure("1234567", "group", "my-key", root="https://example.org")
+
+    assert web_api.BASE_URL == "https://example.org/groups/1234567"
     assert web_api.API_KEY == "my-key"
 
     web_api.configure("0", "user", "another-key", root="https://example.org")

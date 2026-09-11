@@ -154,7 +154,7 @@ def _note_text(paper: Paper) -> str:
 
 
 def test_detect_changes_with_no_snapshot_reports_nothing():
-    paper = _make_paper(collections=["Research"], tags=["Neural Networks"])
+    paper = _make_paper(direct_collections=["Research"], tags=["Neural Networks"])
 
     result = detect_changes(_note_text(paper), paper, None)
 
@@ -167,7 +167,7 @@ def test_detect_changes_with_no_snapshot_reports_nothing():
 
 
 def test_detect_changes_with_matching_snapshot_reports_nothing():
-    paper = _make_paper(collections=["Research"], tags=["Neural Networks"])
+    paper = _make_paper(direct_collections=["Research"], tags=["Neural Networks"])
     snapshot = {"collections": ["Research"], "tags": ["neural-networks"]}
 
     result = detect_changes(_note_text(paper), paper, snapshot)
@@ -181,7 +181,7 @@ def test_detect_changes_with_matching_snapshot_reports_nothing():
 
 
 def test_detect_changes_flags_vault_side_collection_edit():
-    paper = _make_paper(collections=["Research"], tags=["Neural Networks"])
+    paper = _make_paper(direct_collections=["Research"], tags=["Neural Networks"])
     snapshot = {"collections": ["Research"], "tags": ["neural-networks"]}
     # Simulate a hand-edit: the vault note's frontmatter now says something
     # the last-synced snapshot doesn't know about.
@@ -194,7 +194,7 @@ def test_detect_changes_flags_vault_side_collection_edit():
 
 
 def test_detect_changes_flags_vault_side_tag_edit():
-    paper = _make_paper(collections=["Research"], tags=["Neural Networks"])
+    paper = _make_paper(direct_collections=["Research"], tags=["Neural Networks"])
     snapshot = {"collections": ["Research"], "tags": ["neural-networks"]}
     edited_text = _note_text(paper).replace('"neural-networks"', '"hand-added-tag"')
 
@@ -207,7 +207,7 @@ def test_detect_changes_flags_vault_side_tag_edit():
 def test_detect_changes_flags_zotero_side_change():
     # paper.collections/tags reflect what Zotero has *now*; a snapshot
     # from an older sync that doesn't match means Zotero changed since.
-    paper = _make_paper(collections=["Research", "New In Zotero"], tags=["Neural Networks"])
+    paper = _make_paper(direct_collections=["Research", "New In Zotero"], tags=["Neural Networks"])
     snapshot = {"collections": ["Research"], "tags": ["neural-networks"]}
 
     result = detect_changes(_note_text(paper), paper, snapshot)
@@ -217,7 +217,9 @@ def test_detect_changes_flags_zotero_side_change():
 
 
 def test_detect_changes_ignores_list_order():
-    paper = _make_paper(collections=["Research", "Machine Learning"], tags=["A Tag", "B Tag"])
+    paper = _make_paper(
+        direct_collections=["Research", "Machine Learning"], tags=["A Tag", "B Tag"]
+    )
     snapshot = {"collections": ["Machine Learning", "Research"], "tags": ["b-tag", "a-tag"]}
 
     result = detect_changes(_note_text(paper), paper, snapshot)
@@ -226,7 +228,7 @@ def test_detect_changes_ignores_list_order():
 
 
 def test_detect_changes_with_no_frontmatter_block_reports_no_vault_change():
-    paper = _make_paper(collections=["Research"], tags=["Neural Networks"])
+    paper = _make_paper(direct_collections=["Research"], tags=["Neural Networks"])
     snapshot = {"collections": ["Research"], "tags": ["neural-networks"]}
 
     result = detect_changes("# Just a heading, no frontmatter", paper, snapshot)
@@ -236,7 +238,7 @@ def test_detect_changes_with_no_frontmatter_block_reports_no_vault_change():
 
 
 def test_detect_changes_with_none_existing_text_skips_vault_side():
-    paper = _make_paper(collections=["Research"], tags=["Neural Networks"])
+    paper = _make_paper(direct_collections=["Research"], tags=["Neural Networks"])
     snapshot = {"collections": ["Research"], "tags": ["neural-networks"]}
 
     result = detect_changes(None, paper, snapshot)
