@@ -51,7 +51,15 @@ issues #5 and #6, which consume these).
   routing both Local API paths (`/api/users/0/items`,
   `/api/users/0/collections`, `/api/users/0/collections/<key>/items`) and
   the BBT JSON-RPC endpoint (`/better-bibtex/json-rpc`, handling
-  `api.ready` and `item.citationkey`).
+  `api.ready` and `item.citationkey`). Also simulates the write-capable
+  subset of the real web API (issue #27, for the future `web_api.py` from
+  #28), on `users`/`groups`-prefixed paths distinct from the Local API's:
+  `GET /users/<id>/items/<key>` and `PATCH /users/<id>/items/<key>`
+  (partial `data` update, full-array replace for `collections`/`tags`,
+  version bump + `Last-Modified-Version` header, `412` on a stale
+  `If-Unmodified-Since-Version`) — see `test_stub_server_web_writes.py`.
+  Items are deep-copied per server instance so these writes don't leak
+  between tests.
 
 Item ids/keys are consistent across all three fixtures and the sqlite file
 — see the table in `build_zotero_sqlite.py`'s docstring.

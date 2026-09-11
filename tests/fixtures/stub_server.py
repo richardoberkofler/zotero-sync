@@ -47,10 +47,31 @@ needed to exercise local_api.py's actual code paths:
   - GET  /api/users/0/collections                  -> collections.json
   - POST /better-bibtex/json-rpc {method: "api.ready"}         -> {"result": true}
   - POST /better-bibtex/json-rpc {method: "item.citationkey"}  -> citationkeys.json's "result" map
+
+Web API simulation (issues #27/#29), routed on the "users"/"groups"
+prefix that real api.zotero.org uses (no "/api" segment), separate from
+the Local API paths above:
+  - GET   /users/<id>/items                       -> all items in items.json
+  - GET   /users/<id>/collections/<key>/items      -> filtered like the
+                                                       Local API route above
+  - GET   /users/<id>/collections                  -> collections.json
+  - GET   /users/<id>/items/<key>                  -> that item (404 if unknown)
+  - PATCH /users/<id>/items/<key>  -> merges the JSON body into item.data
+                                       (full-array replace for
+                                       collections/tags, per Zotero's real
+                                       semantics), bumps the item's
+                                       version, responds 204 with a
+                                       Last-Modified-Version header.
+                                       Honors If-Unmodified-Since-Version:
+                                       mismatch -> 412, matching header or
+                                       no header -> write applied.
+Items are deep-copied per ZoteroStubServer instance, so PATCH writes in
+one test never leak into another.
 """
 
 from __future__ import annotations
 
+import copy
 import json
 import re
 import threading
@@ -67,6 +88,16 @@ with open(FIXTURES_DIR / "bbt" / "citationkeys.json", encoding="utf-8") as f:
     _CITATIONKEYS_RESULT = json.load(f)["result"]
 
 _COLLECTION_ITEMS_RE = re.compile(r"^/api/users/0/collections/([^/]+)/items$")
+
+# Web API paths (issues #27/#29), shaped like the real api.zotero.org
+# (no "/api" prefix, "users"/"groups" + numeric library id), distinct from
+# the Local API paths above so the two simulated services stay visibly
+# separate, matching how zotero-sync's own local_api.py/web_api.py address
+# different hosts in real use.
+_WEB_ITEM_RE = re.compile(r"^/(?:users|groups)/(\d+)/items/([^/]+)$")
+_WEB_ITEMS_RE = re.compile(r"^/(?:users|groups)/(\d+)/items$")
+_WEB_COLLECTION_ITEMS_RE = re.compile(r"^/(?:users|groups)/(\d+)/collections/([^/]+)/items$")
+_WEB_COLLECTIONS_RE = re.compile(r"^/(?:users|groups)/(\d+)/collections$")
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -105,14 +136,16 @@ class _Handler(BaseHTTPRequestHandler):
         path = self.path.split("?", 1)[0]
 
         if path == "/api/users/0/items":
-            self._send_json(_ITEMS)
+            self._send_json(self.server.items)
             return
 
         match = _COLLECTION_ITEMS_RE.match(path)
         if match:
             collection_key = match.group(1)
             filtered = [
-                item for item in _ITEMS if collection_key in item["data"].get("collections", [])
+                item
+                for item in self.server.items
+                if collection_key in item["data"].get("collections", [])
             ]
             self._send_json(filtered)
             return
@@ -121,7 +154,38 @@ class _Handler(BaseHTTPRequestHandler):
             self._send_json(_COLLECTIONS)
             return
 
+        if _WEB_ITEMS_RE.match(path):
+            self._send_json(self.server.items)
+            return
+
+        match = _WEB_COLLECTION_ITEMS_RE.match(path)
+        if match:
+            collection_key = match.group(2)
+            filtered = [
+                item
+                for item in self.server.items
+                if collection_key in item["data"].get("collections", [])
+            ]
+            self._send_json(filtered)
+            return
+
+        if _WEB_COLLECTIONS_RE.match(path):
+            self._send_json(_COLLECTIONS)
+            return
+
+        match = _WEB_ITEM_RE.match(path)
+        if match:
+            item = self._find_item(match.group(2))
+            if item is None:
+                self._send_json({"error": f"stub: no such item {match.group(2)}"}, status=404)
+                return
+            self._send_json(item)
+            return
+
         self._send_json({"error": f"stub: no route for GET {path}"}, status=404)
+
+    def _find_item(self, key: str) -> dict | None:
+        return next((item for item in self.server.items if item["key"] == key), None)
 
     def do_POST(self) -> None:  # noqa: N802
         if self._send_fault():
@@ -160,6 +224,53 @@ class _Handler(BaseHTTPRequestHandler):
             status=200,
         )
 
+    def do_PATCH(self) -> None:  # noqa: N802
+        """Simulates the real web API's PATCH item endpoint (issue #27):
+        partial update of `data` fields (e.g. `collections`/`tags`, full-
+        array replace, per docs/research/2023-zotero-web-api-2way-sync.md),
+        version bump on success (`Last-Modified-Version` header), and
+        optimistic-concurrency 412 when `If-Unmodified-Since-Version` is
+        sent and doesn't match the item's current version."""
+        if self._send_fault():
+            return
+
+        match = _WEB_ITEM_RE.match(self.path.split("?", 1)[0])
+        if not match:
+            self._send_json({"error": f"stub: no route for PATCH {self.path}"}, status=404)
+            return
+
+        item = self._find_item(match.group(2))
+        if item is None:
+            self._send_json({"error": f"stub: no such item {match.group(2)}"}, status=404)
+            return
+
+        current_version = item["version"]
+        since_version = self.headers.get("If-Unmodified-Since-Version")
+        if since_version is not None and int(since_version) != current_version:
+            body = (
+                "Item has been modified since specified version "
+                f"(expected {since_version}, found {current_version})"
+            ).encode("utf-8")
+            self.send_response(412)
+            self.send_header("Content-Type", "text/plain")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        length = int(self.headers.get("Content-Length", 0))
+        raw = self.rfile.read(length) if length else b"{}"
+        payload = json.loads(raw or b"{}")
+        item["data"].update(payload)
+        new_version = current_version + 1
+        item["version"] = new_version
+        item["data"]["version"] = new_version
+
+        self.send_response(204)
+        self.send_header("Last-Modified-Version", str(new_version))
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
 
 class ZoteroStubServer:
     """Serves the Local API + BBT fixtures on an OS-assigned localhost port.
@@ -173,6 +284,9 @@ class ZoteroStubServer:
     def __init__(self, host: str = "127.0.0.1", port: int = 0) -> None:
         self._httpd = HTTPServer((host, port), _Handler)
         self._httpd.fault = None
+        # Per-instance deep copy so PATCH writes (issue #27) in one test
+        # never leak into another via the shared module-level fixture.
+        self._httpd.items = copy.deepcopy(_ITEMS)
         self._thread: threading.Thread | None = None
 
     @property
@@ -197,6 +311,14 @@ class ZoteroStubServer:
     @property
     def bbt_rpc_url(self) -> str:
         return f"http://127.0.0.1:{self.port}/better-bibtex/json-rpc"
+
+    @property
+    def web_api_base_url(self) -> str:
+        """Shaped like a real https://api.zotero.org/<prefix> base, for a
+        future web_api.py (issue #28) to point at during tests. Uses the
+        "users/0" prefix, matching the same fake library used everywhere
+        else in these fixtures."""
+        return f"http://127.0.0.1:{self.port}/users/0"
 
     def start(self) -> None:
         self._thread = threading.Thread(target=self._httpd.serve_forever, daemon=True)

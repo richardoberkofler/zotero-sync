@@ -44,6 +44,7 @@ The full set of References being synced — either the whole Zotero library, or 
 
 zotero-sync reads from three places, each authoritative for something the others don't have:
 
-- **Local API**: Zotero's own local HTTP API — Reference metadata, Collections, Tags.
+- **Local API**: Zotero's own local HTTP API — Reference metadata, Collections, Tags. Used when `mode = "local"` (the default), which is read-only.
+- **Web API** (`api.zotero.org`): Zotero's write-capable HTTP API — the same Reference metadata/Collections/Tags as the Local API, but reachable over the network with an API key, and the only surface that supports writing them back. Used instead of the Local API when `mode = "web"`. As of #29, only the read side is wired into the sync pipeline; writing vault-side edits back to Zotero is still future work, pending #24/#25.
 - **Better BibTeX (BBT)**: a Zotero plugin's local JSON-RPC endpoint — Citekeys, the one fact BBT owns.
 - **zotero.sqlite copy**: a temporary copy of Zotero's database — Annotations, since neither API exposes them.

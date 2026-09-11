@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from zotero_sync import annotations, bbt_client, local_api
+from types import ModuleType
+
+from zotero_sync import annotations, bbt_client, local_api, sync_state, web_api
 from zotero_sync.config import Config
 from zotero_sync.errors import ZoteroSyncError
 from zotero_sync.model import Annotation, Paper
@@ -28,11 +30,18 @@ def _creator_name(creator: dict) -> str:
     return " ".join(part for part in (creator.get("firstName"), creator.get("lastName")) if part)
 
 
-def _collection_maps() -> tuple[dict[str, str], dict[str, str | None]]:
+def _api_module(config: Config) -> ModuleType:
+    """local_api and web_api expose matching read/write function names by
+    design (#28's decision), so picking between them is a plain module
+    swap — no client abstraction needed."""
+    return web_api if config.mode == "web" else local_api
+
+
+def _collection_maps(api: ModuleType) -> tuple[dict[str, str], dict[str, str | None]]:
     """Returns (key -> name, key -> parent_key)."""
     names: dict[str, str] = {}
     parents: dict[str, str | None] = {}
-    for c in local_api.list_collections():
+    for c in api.list_collections():
         data = c["data"]
         names[data["key"]] = data["name"]
         parents[data["key"]] = data.get("parentCollection") or None
@@ -60,20 +69,27 @@ def _collection_names_with_ancestors(
 def build_papers(
     config: Config, db_copy_path, counts: SyncCounts | None = None
 ) -> tuple[list[Paper], dict[str, dict]]:
+    api = _api_module(config)
+
     collection_key = None
     if config.collection:
-        collection_key = local_api.find_collection_key(config.collection)
+        collection_key = api.find_collection_key(config.collection)
         if collection_key is None:
             raise ZoteroSyncError(f'No Zotero collection named "{config.collection}" was found.')
 
-    items = local_api.list_paper_items(collection_key)
+    items = api.list_paper_items(collection_key)
     if not items:
         return [], {}
 
     item_ids = [f"{BBT_LIBRARY_ID}:{item['data']['key']}" for item in items]
     citekey_map = bbt_client.citationkeys(item_ids)
 
-    collection_names, collection_parents = _collection_maps()
+    collection_names, collection_parents = _collection_maps(api)
+    # Recorded for web mode only (sync_state.py) — the item's current
+    # version, so a future write can send a correct
+    # If-Unmodified-Since-Version. Not meaningful for local mode, which
+    # stays read-only and whose fixtures don't always carry a "version".
+    item_versions = {item["data"]["key"]: item["version"] for item in items if "version" in item}
 
     keys = [item["data"]["key"] for item in items]
     item_id_by_key = annotations.item_ids_by_key(db_copy_path, keys)
@@ -119,7 +135,11 @@ def build_papers(
             )
         )
 
-    return papers, {"names": collection_names, "parents": collection_parents}
+    return papers, {
+        "names": collection_names,
+        "parents": collection_parents,
+        "item_versions": item_versions,
+    }
 
 
 # zotero.sqlite's itemAnnotations.type is an integer code, not a string.
@@ -167,6 +187,14 @@ def attach_annotations(papers: list[Paper], db_copy_path) -> None:
 def run(config: Config) -> SyncCounts:
     bbt_client.check_ready()
 
+    if config.mode == "web":
+        web_api.configure(
+            config.web_library_id,
+            config.web_library_type,
+            config.web_api_key,
+            root=config.web_api_root,
+        )
+
     counts = SyncCounts()
 
     source_db = annotations.zotero_sqlite_path(config.zotero_dir)
@@ -187,6 +215,9 @@ def run(config: Config) -> SyncCounts:
         attach_annotations(papers, db_copy)
     finally:
         db_copy.unlink(missing_ok=True)
+
+    if config.mode == "web" and not config.dry_run:
+        sync_state.save_state(config.vault_path, collection_info.get("item_versions", {}))
 
     fields = config.frontmatter_fields
     collection_names = collection_info.get("names", {})
